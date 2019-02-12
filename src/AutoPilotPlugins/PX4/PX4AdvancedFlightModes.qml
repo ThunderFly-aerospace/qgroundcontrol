@@ -43,6 +43,13 @@ Item {
                                       qsTr("The following channels: ") + controller.reservedChannels +
                                       qsTr(" are not available for Flight Modes since they are already in use for other functions."))
 
+    //TF:
+
+    readonly property string rrManualModeName:          qsTr("Rover roof manual mode")
+    readonly property string rrManualModeDestription:   qsTr("Rover roof manual mode")
+    readonly property string rrStabilizedModeName:      qsTr("Rover roof manual mode")
+    readonly property string rrStabilizedModeDestription:qsTr("Rover roof manual mode")
+
     readonly property string fwManualModeName:          qsTr("Manual/Main")
     readonly property string mrManualModeName:          qsTr("Stabilized/Main")
     readonly property string fwManualModeDescription:   qsTr("The pilot has full control of the aircraft, no assistance is provided. ") +
@@ -248,6 +255,38 @@ Item {
                 thresholdDragEnabled:   true
 
                 onThresholdValueChanged: controller.assistModeThreshold = thresholdValue
+
+                Behavior on y { PropertyAnimation { easing.type: Easing.InOutQuad; duration: 1000 } }
+            }
+
+            ModeSwitchDisplay {
+                id:                     rrManualMode
+                anchors.top:            lastSpacer.bottom
+                flightModeName:         rrManualModeName
+                flightModeDescription:  rrManualModeDestription
+                rcValue:                controller.rrManualModeRcValue
+                modeChannelIndex:       controller.rrManualModeChannelIndex
+                modeChannelEnabled:     true
+                modeSelected:           controller.rrManualModeSelected
+                thresholdValue:         controller.rrManualModeThreshold
+                thresholdDragEnabled:   false
+
+                onModeChannelIndexSelected: controller.rrManualModeChannelIndex = index
+            }
+
+            ModeSwitchDisplay {
+                id:                     rrStabilizedMode
+                visible:                controller.rrStabilizedModeVisible
+                flightModeName:         rrStabilizedModeName
+                flightModeDescription:  rrStabilizedModeDestription
+                rcValue:                controller.rrStabilizedModeRcValue
+                modeChannelIndex:       controller.rrStabilizedModeChannelIndex
+                modeChannelEnabled:     false
+                modeSelected:           controller.rrStabilizedModeSelected
+                thresholdValue:         controller.rrStabilizedModeThreshold
+                thresholdDragEnabled:   true
+
+                onThresholdValueChanged: controller.rrStabilizedModeThreshold = thresholdValue
 
                 Behavior on y { PropertyAnimation { easing.type: Easing.InOutQuad; duration: 1000 } }
             }

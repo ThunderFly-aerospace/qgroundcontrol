@@ -215,6 +215,9 @@ private:
     bool _loiterModeSelected;
     bool _returnModeSelected;
     bool _offboardModeSelected;
+    bool _rrManualModeSelected;
+    bool _rrStabilivedModeSelected;
+    bool _rrPrerotateModeSelected;
     
     bool _assistModeVisible;
     bool _autoModeVisible;

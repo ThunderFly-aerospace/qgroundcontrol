@@ -91,6 +91,9 @@ protected:
     QString _manualFlightMode;
     QString _acroFlightMode;
     QString _stabilizedFlightMode;
+    QString _rrPrerotateFlightMode;
+    QString _rrManualFlightMode;
+    QString _rrStabilizedFlightMode;
     QString _rattitudeFlightMode;
     QString _altCtlFlightMode;
     QString _posCtlFlightMode;

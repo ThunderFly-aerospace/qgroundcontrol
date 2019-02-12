@@ -38,6 +38,9 @@ PX4FirmwarePlugin::PX4FirmwarePlugin(void)
     : _manualFlightMode(tr("Manual"))
     , _acroFlightMode(tr("Acro"))
     , _stabilizedFlightMode(tr("Stabilized"))
+    , _rrManualFlightMode(tr("RR Manual"))
+    , _rrStabilizedFlightMode(tr("RR Stabilized"))
+    , _rrPrerotateFlightMode(tr("RR Prerotate"))
     , _rattitudeFlightMode(tr("Rattitude"))
     , _altCtlFlightMode(tr("Altitude"))
     , _posCtlFlightMode(tr("Position"))
@@ -72,12 +75,15 @@ PX4FirmwarePlugin::PX4FirmwarePlugin(void)
         //main_mode                         sub_mode                                canBeSet  FW      MC
         { PX4_CUSTOM_MAIN_MODE_MANUAL,      0,                                      true,   true,   true },
         { PX4_CUSTOM_MAIN_MODE_STABILIZED,  0,                                      true,   true,   true },
+        {PX4_CUSTOM_MAIN_MODE_RR_PREROTATE, 0,                                      true,   true,   true },
+        {PX4_CUSTOM_MAIN_MODE_RR_MANUAL,    0,                                      true,   true,   true },
+        {PX4_CUSTOM_MAIN_MODE_RR_STABILIZED,0,                                      true,   true,   true },
         { PX4_CUSTOM_MAIN_MODE_ACRO,        0,                                      true,   true,   true },
         { PX4_CUSTOM_MAIN_MODE_RATTITUDE,   0,                                      true,   true,   true },
         { PX4_CUSTOM_MAIN_MODE_ALTCTL,      0,                                      true,   true,   true },
         { PX4_CUSTOM_MAIN_MODE_POSCTL,      0,                                      true,   true,   true },
         // simple can't be set by the user right now
-        { PX4_CUSTOM_MAIN_MODE_SIMPLE,      0,                                      false,   false,  true },
+        //{ PX4_CUSTOM_MAIN_MODE_SIMPLE,      0,                                      false,   false,  true },
         { PX4_CUSTOM_MAIN_MODE_AUTO,        PX4_CUSTOM_SUB_MODE_AUTO_LOITER,        true,   true,   true },
         { PX4_CUSTOM_MAIN_MODE_AUTO,        PX4_CUSTOM_SUB_MODE_AUTO_MISSION,       true,   true,   true },
         { PX4_CUSTOM_MAIN_MODE_AUTO,        PX4_CUSTOM_SUB_MODE_AUTO_RTL,           true,   true,   true },
@@ -95,6 +101,10 @@ PX4FirmwarePlugin::PX4FirmwarePlugin(void)
     const QString* rgModeNames[] = {
         &_manualFlightMode,
         &_stabilizedFlightMode,
+     //TF:
+        &_rrPrerotateFlightMode,
+        &_rrManualFlightMode,
+        &_rrStabilizedFlightMode,
         &_acroFlightMode,
         &_rattitudeFlightMode,
         &_altCtlFlightMode,
@@ -176,15 +186,17 @@ QString PX4FirmwarePlugin::flightMode(uint8_t base_mode, uint32_t custom_mode) c
 
         bool found = false;
         foreach (const FlightModeInfo_t& info, _flightModeInfoList) {
+            qWarning() << "Loop:" << info.main_mode << ", " << px4_mode.main_mode;
             if (info.main_mode == px4_mode.main_mode && info.sub_mode == px4_mode.sub_mode) {
-                flightMode = *info.name;
+     //TF: Add main node to list
+                flightMode = *info.name + tr(" %1").arg(px4_mode.main_mode);
                 found = true;
                 break;
             }
         }
 
         if (!found) {
-            qWarning() << "Unknown flight mode" << custom_mode;
+            qWarning() << "Unknown flight mode" << custom_mode << base_mode;
             return tr("Unknown %1:%2").arg(base_mode).arg(custom_mode);
         }
     } else {
@@ -207,6 +219,8 @@ bool PX4FirmwarePlugin::setFlightMode(const QString& flightMode, uint8_t* base_m
             px4_mode.data = 0;
             px4_mode.main_mode = info.main_mode;
             px4_mode.sub_mode = info.sub_mode;
+
+            qWarning() << "SetFlightMode" << px4_mode.main_mode;
 
             *base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
             *custom_mode = px4_mode.data;
