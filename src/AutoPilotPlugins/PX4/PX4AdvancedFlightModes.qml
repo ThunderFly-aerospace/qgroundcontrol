@@ -47,8 +47,8 @@ Item {
 
     readonly property string rrManualModeName:          qsTr("Rover roof manual mode")
     readonly property string rrManualModeDestription:   qsTr("Rover roof manual mode")
-    readonly property string rrStabilizedModeName:      qsTr("Rover roof manual mode")
-    readonly property string rrStabilizedModeDestription:qsTr("Rover roof manual mode")
+    readonly property string rrStabilizedModeName:      qsTr("Rover roof stabilized mode")
+    readonly property string rrStabilizedModeDestription:qsTr("Rover roof stabilized mode")
 
     readonly property string fwManualModeName:          qsTr("Manual/Main")
     readonly property string mrManualModeName:          qsTr("Stabilized/Main")
@@ -257,6 +257,22 @@ Item {
                 onThresholdValueChanged: controller.assistModeThreshold = thresholdValue
 
                 Behavior on y { PropertyAnimation { easing.type: Easing.InOutQuad; duration: 1000 } }
+            }
+
+
+            ModeSwitchDisplay {
+                id:                     rrPrerotateMode
+                anchors.top:            lastSpacer.bottom
+                flightModeName:         rrPrerotateModeName
+                flightModeDescription:  rrPrerotateModeDestription
+                rcValue:                controller.rrPrerotateModeRcValue
+                modeChannelIndex:       controller.rrPrerotateModeChannelIndex
+                modeChannelEnabled:     true
+                modeSelected:           controller.rrPrerotateModeSelected
+                thresholdValue:         controller.rrPrerotateModeThreshold
+                thresholdDragEnabled:   false
+
+                onModeChannelIndexSelected: controller.rrPrerotateModeChannelIndex = index
             }
 
             ModeSwitchDisplay {
