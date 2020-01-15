@@ -18,8 +18,8 @@ class QmlObjectListModel : public QAbstractListModel
     Q_OBJECT
     
 public:
-    QmlObjectListModel(QObject* parent = NULL);
-    ~QmlObjectListModel();
+    QmlObjectListModel(QObject* parent = nullptr);
+    ~QmlObjectListModel() override;
     
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     
@@ -27,12 +27,13 @@ public:
     /// a dirty property and dirtyChanged signal.
     Q_PROPERTY(bool dirty READ dirty WRITE setDirty NOTIFY dirtyChanged)
 
-    Q_INVOKABLE QObject* get(int index)     { return _objectList[index]; }
+    Q_INVOKABLE QObject* get(int index);
 
     // Property accessors
     
     int         count               () const;
     bool        dirty               () const { return _dirty; }
+
     void        setDirty            (bool dirty);
     void        append              (QObject* object);
     void        append              (QList<QObject*> objects);
@@ -56,8 +57,8 @@ public:
     /// Clears the list and calls deleteLater on each entry
     void clearAndDeleteContents     ();
 
-    void beginReset                 () { beginResetModel(); }
-    void endReset                   () { endResetModel();   }
+    void beginReset                 ();
+    void endReset                   ();
 
 signals:
     void countChanged               (int count);
@@ -80,6 +81,7 @@ private:
     
     bool _dirty;
     bool _skipDirtyFirstItem;
+    bool _externalBeginResetModel;
         
     static const int ObjectRole;
     static const int TextRole;

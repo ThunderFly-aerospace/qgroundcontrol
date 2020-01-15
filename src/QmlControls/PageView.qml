@@ -12,7 +12,6 @@ Rectangle {
     color:  qgcPal.window
     radius: ScreenTools.defaultFontPixelWidth * 0.5
 
-    property var    qgcView         ///< QGCView to use for showing dialogs
     property real   maxHeight       ///< Maximum height that should be taken, smaller than this is ok
 
     property real   _margins:           ScreenTools.defaultFontPixelWidth / 2
@@ -28,16 +27,18 @@ Rectangle {
         model:          _instrumentPages
         textRole:       "title"
         centeredLabel:  true
-        pointSize:      ScreenTools.smallFontPointSize
+        font.pointSize: ScreenTools.smallFontPointSize
 
-        Image {
+        QGCColoredImage {
             anchors.leftMargin:     _margins
             anchors.left:           parent.left
             anchors.verticalCenter: parent.verticalCenter
             source:                 "/res/gear-black.svg"
             mipmap:                 true
-            width:                  parent.height -(_margins * 2)
-            sourceSize.width:       width
+            height:                 parent.height * 0.7
+            width:                  height
+            sourceSize.height:      height
+            color:                  qgcPal.text
             fillMode:               Image.PreserveAspectFit
             visible:                pageWidgetLoader.item ? (pageWidgetLoader.item.showSettingsIcon ? pageWidgetLoader.item.showSettingsIcon : false) : false
 
@@ -64,9 +65,7 @@ Rectangle {
         Loader {
             id:     pageWidgetLoader
             source: _instrumentPages[pageCombo.currentIndex].url
-
-            property var    qgcView:    _root.qgcView
-            property real   pageWidth:  parent.width
+            property real pageWidth:  parent.width
         }
     }
 }

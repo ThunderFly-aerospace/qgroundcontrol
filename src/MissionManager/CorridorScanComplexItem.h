@@ -48,10 +48,11 @@ public:
     QString mapVisualQML        (void) const final { return QStringLiteral("CorridorScanMapVisual.qml"); }
 
     // Overrides from VisualMissionionItem
-    QString commandDescription  (void) const final { return tr("Corridor Scan"); }
-    QString commandName         (void) const final { return tr("Corridor Scan"); }
-    QString abbreviation        (void) const final { return tr("C"); }
-    bool    readyForSave        (void) const;
+    QString             commandDescription  (void) const final { return tr("Corridor Scan"); }
+    QString             commandName         (void) const final { return tr("Corridor Scan"); }
+    QString             abbreviation        (void) const final { return tr("C"); }
+    ReadyForSaveState   readyForSaveState   (void) const final;
+    double              additionalTimeDelay (void) const final { return 0; }
 
     static const char* jsonComplexItemTypeValue;
 
@@ -64,12 +65,14 @@ private slots:
 
     // Overrides from TransectStyleComplexItem
     void _rebuildTransectsPhase1    (void) final;
-    void _rebuildTransectsPhase2    (void) final;
+    void _recalcComplexDistance     (void) final;
+    void _recalcCameraShots         (void) final;
 
 private:
-    int _transectCount              (void) const;
-    void _buildAndAppendMissionItems(QList<MissionItem*>& items, QObject* missionItemParent);
-    void _appendLoadedMissionItems  (QList<MissionItem*>& items, QObject* missionItemParent);
+    double  _transectSpacing            (void) const;
+    int     _transectCount              (void) const;
+    void    _buildAndAppendMissionItems (QList<MissionItem*>& items, QObject* missionItemParent);
+    void    _appendLoadedMissionItems   (QList<MissionItem*>& items, QObject* missionItemParent);
 
     QGCMapPolyline                  _corridorPolyline;
     QList<QList<QGeoCoordinate>>    _transectSegments;      ///< Internal transect segments including grid exit, turnaround and internal camera points

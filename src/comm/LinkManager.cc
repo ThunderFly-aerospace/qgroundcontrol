@@ -21,6 +21,7 @@
 #include "UDPLink.h"
 #include "TCPLink.h"
 #include "SettingsManager.h"
+#include "LogReplayLink.h"
 #ifdef QGC_ENABLE_BLUETOOTH
 #include "BluetoothLink.h"
 #endif
@@ -113,11 +114,11 @@ LinkInterface* LinkManager::createConnectedLink(SharedLinkConfigurationPointer& 
 #ifndef NO_SERIAL_LINK
     case LinkConfiguration::TypeSerial:
     {
-        SerialConfiguration* serialConfig = dynamic_cast<SerialConfiguration*>(config.data());
+        auto* serialConfig = qobject_cast<SerialConfiguration*>(config.data());
         if (serialConfig) {
             pLink = new SerialLink(config, isPX4Flow);
             if (serialConfig->usbDirect()) {
-                _activeLinkCheckList.append(dynamic_cast<SerialLink*>(pLink));
+                _activeLinkCheckList.append(qobject_cast<SerialLink*>(pLink));
                 if (!_activeLinkCheckTimer.isActive()) {
                     _activeLinkCheckTimer.start();
                 }
@@ -139,11 +140,9 @@ LinkInterface* LinkManager::createConnectedLink(SharedLinkConfigurationPointer& 
         pLink = new BluetoothLink(config);
         break;
 #endif
-#ifndef __mobile__
     case LinkConfiguration::TypeLogReplay:
         pLink = new LogReplayLink(config);
         break;
-#endif
 #ifdef QT_DEBUG
     case LinkConfiguration::TypeMock:
         pLink = new MockLink(config);
@@ -200,6 +199,7 @@ void LinkManager::_addLink(LinkInterface* link)
 
     connect(link, &LinkInterface::communicationError,   _app,               &QGCApplication::criticalMessageBoxOnMainThread);
     connect(link, &LinkInterface::bytesReceived,        _mavlinkProtocol,   &MAVLinkProtocol::receiveBytes);
+    connect(link, &LinkInterface::bytesSent,            _mavlinkProtocol,   &MAVLinkProtocol::logSentBytes);
 
     _mavlinkProtocol->resetMetadataForLink(link);
     _mavlinkProtocol->setVersion(_mavlinkProtocol->getCurrentVersion());
@@ -379,28 +379,26 @@ void LinkManager::loadLinkConfigurationList()
                             switch(type) {
 #ifndef NO_SERIAL_LINK
                             case LinkConfiguration::TypeSerial:
-                                pLink = dynamic_cast<LinkConfiguration*>(new SerialConfiguration(name));
+                                pLink = new SerialConfiguration(name);
                                 break;
 #endif
                             case LinkConfiguration::TypeUdp:
-                                pLink = dynamic_cast<LinkConfiguration*>(new UDPConfiguration(name));
+                                pLink = new UDPConfiguration(name);
                                 break;
                             case LinkConfiguration::TypeTcp:
-                                pLink = dynamic_cast<LinkConfiguration*>(new TCPConfiguration(name));
+                                pLink = new TCPConfiguration(name);
                                 break;
 #ifdef QGC_ENABLE_BLUETOOTH
                             case LinkConfiguration::TypeBluetooth:
-                                pLink = dynamic_cast<LinkConfiguration*>(new BluetoothConfiguration(name));
+                                pLink = new BluetoothConfiguration(name);
                                 break;
 #endif
-#ifndef __mobile__
                             case LinkConfiguration::TypeLogReplay:
-                                pLink = dynamic_cast<LinkConfiguration*>(new LogReplayLinkConfiguration(name));
+                                pLink = new LogReplayLinkConfiguration(name);
                                 break;
-#endif
 #ifdef QT_DEBUG
                             case LinkConfiguration::TypeMock:
-                                pLink = dynamic_cast<LinkConfiguration*>(new MockConfiguration(name));
+                                pLink = new MockConfiguration(name);
                                 break;
 #endif
                             case LinkConfiguration::TypeLast:
@@ -518,7 +516,7 @@ void LinkManager::_updateAutoConnectLinks(void)
 #endif
 
     // Iterate Comm Ports
-    for (QGCSerialPortInfo portInfo: portList) {
+    for (const QGCSerialPortInfo& portInfo: portList) {
         qCDebug(LinkManagerVerboseLog) << "-----------------------------------------------------";
         qCDebug(LinkManagerVerboseLog) << "portName:          " << portInfo.portName();
         qCDebug(LinkManagerVerboseLog) << "systemLocation:    " << portInfo.systemLocation();
@@ -764,6 +762,7 @@ bool LinkManager::endConfigurationEditing(LinkConfiguration* config, LinkConfigu
         saveLinkConfigurationList();
         // Tell link about changes (if any)
         config->updateSettings();
+        emit config->nameChanged(config->name());
         // Discard temporary duplicate
         delete editedConfig;
     } else {
@@ -847,7 +846,6 @@ void LinkManager::_fixUnnamed(LinkConfiguration* config)
             }
                 break;
 #endif
-#ifndef __mobile__
             case LinkConfiguration::TypeLogReplay: {
                 LogReplayLinkConfiguration* tconfig = dynamic_cast<LogReplayLinkConfiguration*>(config);
                 if(tconfig) {
@@ -855,7 +853,6 @@ void LinkManager::_fixUnnamed(LinkConfiguration* config)
                 }
             }
                 break;
-#endif
 #ifdef QT_DEBUG
             case LinkConfiguration::TypeMock:
                 config->setName(QString("Mock Link"));
@@ -931,7 +928,7 @@ void LinkManager::_activeLinkCheck(void)
         QSignalSpy spy(link, SIGNAL(bytesReceived(LinkInterface*, QByteArray)));
         if (spy.wait(100)) {
             QList<QVariant> arguments = spy.takeFirst();
-            if (arguments[1].value<QByteArray>().contains("nsh>")) {
+            if (arguments[1].toByteArray().contains("nsh>")) {
                 foundNSHPrompt = true;
             }
         }
@@ -994,7 +991,7 @@ void LinkManager::startAutoConnectedLinks(void)
 int LinkManager::_reserveMavlinkChannel(void)
 {
     // Find a mavlink channel to use for this link, Channel 0 is reserved for internal use.
-    for (uint8_t mavlinkChannel = 1; mavlinkChannel < 32; mavlinkChannel++) {
+    for (uint8_t mavlinkChannel = 1; mavlinkChannel < MAVLINK_COMM_NUM_BUFFERS; mavlinkChannel++) {
         if (!(_mavlinkChannelsUsedBitMask & 1 << mavlinkChannel)) {
             mavlink_reset_channel_status(mavlinkChannel);
             // Start the channel on Mav 1 protocol
@@ -1014,4 +1011,14 @@ void LinkManager::_freeMavlinkChannel(int channel)
 
 void LinkManager::_mavlinkMessageReceived(LinkInterface* link, mavlink_message_t message) {
     link->startMavlinkMessagesTimer(message.sysid);
+}
+
+LogReplayLink* LinkManager::startLogReplay(const QString& logFile)
+{
+    LogReplayLinkConfiguration* linkConfig = new LogReplayLinkConfiguration(tr("Log Replay"));
+    linkConfig->setLogFilename(logFile);
+    linkConfig->setName(linkConfig->logFilenameShort());
+
+    SharedLinkConfigurationPointer sharedConfig = addConfiguration(linkConfig);
+    return qobject_cast<LogReplayLink*>(createConnectedLink(sharedConfig));
 }

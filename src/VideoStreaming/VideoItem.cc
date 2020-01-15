@@ -57,7 +57,7 @@ VideoSurface *VideoItem::surface() const
 #if defined(QGC_GST_STREAMING)
     return _data->surface.data();
 #else
-    return NULL;
+    return nullptr;
 #endif
 }
 
@@ -78,18 +78,29 @@ void VideoItem::setSurface(VideoSurface *surface)
 }
 
 #if defined(QGC_GST_STREAMING)
+QSGGeometry* VideoItem::_createDefaultGeometry(QRectF& rectBound)
+{
+	QSGGeometry *geometry = new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), 4);
+	geometry->vertexDataAsPoint2D()[0].set(rectBound.x(), rectBound.y());
+	geometry->vertexDataAsPoint2D()[1].set(rectBound.x(), rectBound.height());
+	geometry->vertexDataAsPoint2D()[2].set(rectBound.width(), rectBound.y());
+	geometry->vertexDataAsPoint2D()[3].set(rectBound.width(), rectBound.height());
+
+	return geometry;
+}
+
 QSGNode* VideoItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData*)
 {
     QRectF r = boundingRect();
-    QSGNode* newNode = 0;
+    QSGNode* newNode = nullptr;
 
     if (_data->surfaceDirty) {
         delete oldNode;
-        oldNode = 0;
+        oldNode = nullptr;
         _data->surfaceDirty = false;
     }
 
-    if (!_data->surface || _data->surface.data()->_data->videoSink == NULL) {
+    if (!_data->surface || _data->surface.data()->_data->videoSink == nullptr) {
         if (!oldNode) {
             QSGFlatColorMaterial *material = new QSGFlatColorMaterial;
             material->setColor(Qt::black);
@@ -103,18 +114,21 @@ QSGNode* VideoItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData*)
             newNode = oldNode;
         }
         if (r != _data->targetArea) {
-            QSGGeometry *geometry = new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), 4);
-            geometry->vertexDataAsPoint2D()[0].set(r.x(), r.y());
-            geometry->vertexDataAsPoint2D()[1].set(r.x(), r.height());
-            geometry->vertexDataAsPoint2D()[2].set(r.width(), r.y());
-            geometry->vertexDataAsPoint2D()[3].set(r.width(), r.height());
             QSGGeometryNode *node = static_cast<QSGGeometryNode*>(newNode);
-            node->setGeometry(geometry);
+			node->setGeometry(_createDefaultGeometry(r));
             _data->targetArea = r;
         }
     } else {
         g_signal_emit_by_name(_data->surface.data()->_data->videoSink, "update-node", (void*)oldNode, r.x(), r.y(), r.width(), r.height(), (void**)&newNode);
     }
+
+	// Sometimes we can still end up here with no geometry when gstreamer fails to create it for whatever reason. If that happens it can
+	// cause crashes.
+	QSGGeometryNode *node = static_cast<QSGGeometryNode*>(newNode);
+	if (node->geometry() == nullptr) {
+		qDebug() << "Creating default geom";
+		node->setGeometry(_createDefaultGeometry(r));
+	}
 
     return newNode;
 }

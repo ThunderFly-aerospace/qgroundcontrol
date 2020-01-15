@@ -18,9 +18,13 @@ class APMMotorComponent : public MotorComponent
     Q_OBJECT
 
 public:
-    APMMotorComponent(Vehicle* vehicle, AutoPilotPlugin* autopilot, QObject* parent = NULL);
+    APMMotorComponent(Vehicle* vehicle, AutoPilotPlugin* autopilot, QObject* parent = nullptr);
 
-    QUrl setupSource(void) const final;
+    // VehicleComponent overrides
+    QUrl setupSource            (void) const override;
+    bool allowSetupWhileArmed   (void) const override { return true; }
+
+    Q_INVOKABLE QString motorIndexToLetter(int index);
 
 private:
     const QString   _name;

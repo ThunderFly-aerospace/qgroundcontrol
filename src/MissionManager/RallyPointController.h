@@ -26,15 +26,15 @@ class RallyPointController : public PlanElementController
     Q_OBJECT
     
 public:
-    RallyPointController(PlanMasterController* masterController, QObject* parent = NULL);
+    RallyPointController(PlanMasterController* masterController, QObject* parent = nullptr);
     ~RallyPointController();
     
     Q_PROPERTY(QmlObjectListModel*  points                  READ points                                             CONSTANT)
     Q_PROPERTY(QString              editorQml               READ editorQml                                          CONSTANT)
     Q_PROPERTY(QObject*             currentRallyPoint       READ currentRallyPoint      WRITE setCurrentRallyPoint  NOTIFY currentRallyPointChanged)
 
-    Q_INVOKABLE void addPoint(QGeoCoordinate point);
-    Q_INVOKABLE void removePoint(QObject* rallyPoint);
+    Q_INVOKABLE void addPoint       (QGeoCoordinate point);
+    Q_INVOKABLE void removePoint    (QObject* rallyPoint);
 
     bool supported                  (void) const final;
     void save                       (QJsonObject& json) final;
@@ -54,7 +54,8 @@ public:
     QString             editorQml               (void) const;
     QObject*            currentRallyPoint       (void) const { return _currentRallyPoint; }
 
-    void setCurrentRallyPoint(QObject* rallyPoint);
+    void setCurrentRallyPoint   (QObject* rallyPoint);
+    bool isEmpty                (void) const;
 
 signals:
     void currentRallyPointChanged(QObject* rallyPoint);

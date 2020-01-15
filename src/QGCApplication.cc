@@ -25,6 +25,7 @@
 #include <QAction>
 #include <QStringListModel>
 #include <QRegularExpression>
+#include <QFontDatabase>
 
 #ifdef QGC_ENABLE_BLUETOOTH
 #include <QBluetoothLocalDevice>
@@ -36,7 +37,6 @@
 
 #include "QGC.h"
 #include "QGCApplication.h"
-#include "AudioOutput.h"
 #include "CmdLineOptParser.h"
 #include "UDPLink.h"
 #include "LinkManager.h"
@@ -71,6 +71,9 @@
 #include "VideoSurface.h"
 #include "VideoReceiver.h"
 #include "LogDownloadController.h"
+#if defined(QGC_ENABLE_MAVLINK_INSPECTOR)
+#include "MAVLinkInspectorController.h"
+#endif
 #include "ValuesWidgetController.h"
 #include "AppMessages.h"
 #include "SimulatedPosition.h"
@@ -90,18 +93,25 @@
 #include "ShapeFileHelper.h"
 #include "QGCFileDownload.h"
 #include "FirmwareImage.h"
+#include "MavlinkConsoleController.h"
+#include "GeoTagController.h"
+#include "LogReplayLink.h"
+#include "VehicleObjectAvoidance.h"
+#include "TrajectoryPoints.h"
+
+#if defined(QGC_ENABLE_PAIRING)
+#include "PairingManager.h"
+#endif
+
+#ifndef __mobile__
+#include "FirmwareUpgradeController.h"
+#endif
 
 #ifndef NO_SERIAL_LINK
 #include "SerialLink.h"
 #endif
 
 #ifndef __mobile__
-#include "QGCQFileDialog.h"
-#include "QGCMessageBox.h"
-#include "FirmwareUpgradeController.h"
-#include "MainWindow.h"
-#include "GeoTagController.h"
-#include "MavlinkConsoleController.h"
 #include "GPS/GPSManager.h"
 #endif
 
@@ -122,9 +132,6 @@ QGCApplication* QGCApplication::_app = nullptr;
 
 const char* QGCApplication::_deleteAllSettingsKey           = "DeleteAllSettingsNextBoot";
 const char* QGCApplication::_settingsVersionKey             = "SettingsVersion";
-
-const char* QGCApplication::_darkStyleFile          = ":/res/styles/style-dark.css";
-const char* QGCApplication::_lightStyleFile         = ":/res/styles/style-light.css";
 
 // Mavlink status structures for entire app
 mavlink_status_t m_mavlink_status[MAVLINK_COMM_NUM_BUFFERS];
@@ -152,80 +159,39 @@ static QObject* shapeFileHelperSingletonFactory(QQmlEngine*, QJSEngine*)
 }
 
 QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
-#ifdef __mobile__
-    : QGuiApplication           (argc, argv)
-    , _qmlAppEngine             (nullptr)
-#else
-    : QApplication              (argc, argv)
-#endif
-    , _runningUnitTests         (unitTesting)
-    , _logOutput                (false)
-    , _fakeMobile               (false)
-    , _settingsUpgraded         (false)
-    , _majorVersion             (0)
-    , _minorVersion             (0)
-    , _buildVersion             (0)
-    , _currentVersionDownload   (nullptr)
-    , _gpsRtkFactGroup          (nullptr)
-    , _toolbox                  (nullptr)
-    , _bluetoothAvailable       (false)
+    : QApplication          (argc, argv)
+    , _runningUnitTests     (unitTesting)
 {
     _app = this;
-
-
-    QLocale locale = QLocale::system();
-    //-- Some forced locales for testing
-    //QLocale locale = QLocale(QLocale::German);
-    //QLocale locale = QLocale(QLocale::French);
-    //QLocale locale = QLocale(QLocale::Chinese);
-#if defined (__macos__)
-    locale = QLocale(locale.name());
-#endif
-    //-- Our localization
-    if(_QGCTranslator.load(locale, "qgc_", "", ":/localization"))
-        _app->installTranslator(&_QGCTranslator);
-
-    // This prevents usage of QQuickWidget to fail since it doesn't support native widget siblings
-#ifndef __android__
-    setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
-#endif
-
-    // Setup for network proxy support
-    QNetworkProxyFactory::setUseSystemConfiguration(true);
+    _msecsElapsedTime.start();
 
 #ifdef Q_OS_LINUX
 #ifndef __mobile__
     if (!_runningUnitTests) {
         if (getuid() == 0) {
-            QMessageBox msgBox;
-            msgBox.setInformativeText(tr("You are running %1 as root. "
-                                         "You should not do this since it will cause other issues with %1. "
-                                         "%1 will now exit. "
-                                         "If you are having serial port issues on Ubuntu, execute the following commands to fix most issues:\n"
-                                         "sudo usermod -a -G dialout $USER\n"
-                                         "sudo apt-get remove modemmanager").arg(qgcApp()->applicationName()));
-            msgBox.setStandardButtons(QMessageBox::Ok);
-            msgBox.setDefaultButton(QMessageBox::Ok);
-            msgBox.exec();
-            _exit(0);
+            _exitWithError(QString(
+                tr("You are running %1 as root. "
+                    "You should not do this since it will cause other issues with %1."
+                    "%1 will now exit.<br/><br/>"
+                    "If you are having serial port issues on Ubuntu, execute the following commands to fix most issues:<br/>"
+                    "<pre>sudo usermod -a -G dialout $USER<br/>"
+                    "sudo apt-get remove modemmanager</pre>").arg(qgcApp()->applicationName())));
+            return;
         }
-
         // Determine if we have the correct permissions to access USB serial devices
         QFile permFile("/etc/group");
         if(permFile.open(QIODevice::ReadOnly)) {
             while(!permFile.atEnd()) {
                 QString line = permFile.readLine();
                 if (line.contains("dialout") && !line.contains(getenv("USER"))) {
-                    QMessageBox msgBox;
-                    msgBox.setInformativeText("The current user does not have the correct permissions to access serial devices. "
-                                              "You should also remove modemmanager since it also interferes. "
-                                              "If you are using Ubuntu, execute the following commands to fix these issues:\n"
-                                              "sudo usermod -a -G dialout $USER\n"
-                                              "sudo apt-get remove modemmanager");
-                    msgBox.setStandardButtons(QMessageBox::Ok);
-                    msgBox.setDefaultButton(QMessageBox::Ok);
-                    msgBox.exec();
-                    break;
+                    permFile.close();
+                    _exitWithError(QString(
+                        tr("The current user does not have the correct permissions to access serial devices. "
+                           "You should also remove modemmanager since it also interferes.<br/><br/>"
+                           "If you are using Ubuntu, execute the following commands to fix these issues:<br/>"
+                           "<pre>sudo usermod -a -G dialout $USER<br/>"
+                           "sudo apt-get remove modemmanager</pre>")));
+                    return;
                 }
             }
             permFile.close();
@@ -233,6 +199,9 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
     }
 #endif
 #endif
+
+    // Setup for network proxy support
+    QNetworkProxyFactory::setUseSystemConfiguration(true);
 
     // Parse command line options
 
@@ -370,21 +339,122 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
    }
 #endif /* __mobile__ */
 
+   setLanguage();
     _checkForNewVersion();
 }
 
-void QGCApplication::_shutdown(void)
+void QGCApplication::_exitWithError(QString errorMessage)
 {
-    // This code is specifically not in the destructor since the application object may not be available in the destructor.
-    // This cause problems for deleting object like settings which are in the toolbox which may have qml references. By
-    // moving them here and having main.cc call this prior to deleting the app object we make sure app object is still
-    // around while these things are shutting down.
-#ifndef __mobile__
-    MainWindow* mainWindow = MainWindow::instance();
-    if (mainWindow) {
-        delete mainWindow;
+    _error = true;
+    QQmlApplicationEngine* pEngine = new QQmlApplicationEngine(this);
+    pEngine->addImportPath("qrc:/qml");
+    pEngine->rootContext()->setContextProperty("errorMessage", errorMessage);
+    pEngine->load(QUrl(QStringLiteral("qrc:/qml/ExitWithErrorWindow.qml")));
+    // Exit main application when last window is closed
+    connect(this, &QGCApplication::lastWindowClosed, this, QGCApplication::quit);
+}
+
+void QGCApplication::setLanguage()
+{
+    _locale = QLocale::system();
+    qDebug() << "System reported locale:" << _locale << _locale.name();
+    int langID = toolbox()->settingsManager()->appSettings()->language()->rawValue().toInt();
+    //-- See App.SettinsGroup.json for index
+    if(langID) {
+        switch(langID) {
+        case 1:
+            _locale = QLocale(QLocale::Bulgarian);
+            break;
+        case 2:
+            _locale = QLocale(QLocale::Chinese);
+            break;
+        case 3:
+            _locale = QLocale(QLocale::Dutch);
+            break;
+        case 4:
+            _locale = QLocale(QLocale::English);
+            break;
+        case 5:
+            _locale = QLocale(QLocale::Finnish);
+            break;
+        case 6:
+            _locale = QLocale(QLocale::French);
+            break;
+        case 7:
+            _locale = QLocale(QLocale::German);
+            break;
+        case 8:
+            _locale = QLocale(QLocale::Greek);
+            break;
+        case 9:
+            _locale = QLocale(QLocale::Hebrew);
+            break;
+        case 10:
+            _locale = QLocale(QLocale::Italian);
+            break;
+        case 11:
+            _locale = QLocale(QLocale::Japanese);
+            break;
+        case 12:
+            _locale = QLocale(QLocale::Korean);
+            break;
+        case 13:
+            _locale = QLocale(QLocale::Norwegian);
+            break;
+        case 14:
+            _locale = QLocale(QLocale::Polish);
+            break;
+        case 15:
+            _locale = QLocale(QLocale::Portuguese);
+            break;
+        case 16:
+            _locale = QLocale(QLocale::Russian);
+            break;
+        case 17:
+            _locale = QLocale(QLocale::Spanish);
+            break;
+        case 18:
+            _locale = QLocale(QLocale::Swedish);
+            break;
+        case 19:
+            _locale = QLocale(QLocale::Turkish);
+            break;
+        }
     }
-#endif
+    //-- We have specific fonts for Korean
+    if(_locale == QLocale::Korean) {
+        qDebug() << "Loading Korean fonts" << _locale.name();
+        if(QFontDatabase::addApplicationFont(":/fonts/NanumGothic-Regular") < 0) {
+            qWarning() << "Could not load /fonts/NanumGothic-Regular font";
+        }
+        if(QFontDatabase::addApplicationFont(":/fonts/NanumGothic-Bold") < 0) {
+            qWarning() << "Could not load /fonts/NanumGothic-Bold font";
+        }
+    }
+    qDebug() << "Loading localization for" << _locale.name();
+    _app->removeTranslator(&_QGCTranslator);
+    _app->removeTranslator(&_QGCTranslatorQt);
+    if(_QGCTranslatorQt.load("qt_" + _locale.name(), QLibraryInfo::location(QLibraryInfo::TranslationsPath))) {
+        _app->installTranslator(&_QGCTranslatorQt);
+    } else {
+        qDebug() << "Qt localization for" << _locale.name() << "is not present";
+    }
+    if(_QGCTranslator.load(_locale, QLatin1String("qgc_"), "", ":/i18n")) {
+        QLocale::setDefault(_locale);
+        _app->installTranslator(&_QGCTranslator);
+    } else {
+        qDebug() << "Error loading application localization for" << _locale.name();
+    }
+    if(_qmlAppEngine)
+        _qmlAppEngine->retranslate();
+    emit languageChanged(_locale);
+}
+
+void QGCApplication::_shutdown()
+{
+    // Close out all Qml before we delete toolbox. This way we don't get all sorts of null reference complaints from Qml.
+    delete _qmlAppEngine;
+
     shutdownVideoStreaming();
     delete _toolbox;
 }
@@ -395,9 +465,10 @@ QGCApplication::~QGCApplication()
     _app = nullptr;
 }
 
-void QGCApplication::_initCommon(void)
+void QGCApplication::_initCommon()
 {
     static const char* kRefOnly         = "Reference only";
+    static const char* kQGroundControl  = "QGroundControl";
     static const char* kQGCControllers  = "QGroundControl.Controllers";
     static const char* kQGCVehicle      = "QGroundControl.Vehicle";
 
@@ -408,23 +479,32 @@ void QGCApplication::_initCommon(void)
     qmlRegisterType<QGCPalette>     ("QGroundControl.Palette", 1, 0, "QGCPalette");
     qmlRegisterType<QGCMapPalette>  ("QGroundControl.Palette", 1, 0, "QGCMapPalette");
 
-    qmlRegisterUncreatableType<Vehicle>             (kQGCVehicle,                           1, 0, "Vehicle",                    kRefOnly);
-    qmlRegisterUncreatableType<MissionItem>         (kQGCVehicle,                           1, 0, "MissionItem",                kRefOnly);
-    qmlRegisterUncreatableType<MissionManager>      (kQGCVehicle,                           1, 0, "MissionManager",             kRefOnly);
-    qmlRegisterUncreatableType<ParameterManager>    (kQGCVehicle,                           1, 0, "ParameterManager",           kRefOnly);
-    qmlRegisterUncreatableType<QGCCameraManager>    (kQGCVehicle,                           1, 0, "QGCCameraManager",           kRefOnly);
-    qmlRegisterUncreatableType<QGCCameraControl>    (kQGCVehicle,                           1, 0, "QGCCameraControl",           kRefOnly);
-    qmlRegisterUncreatableType<QGCVideoStreamInfo>  (kQGCVehicle,                           1, 0, "QGCVideoStreamInfo",         kRefOnly);
-    qmlRegisterUncreatableType<LinkInterface>       (kQGCVehicle,                           1, 0, "LinkInterface",              kRefOnly);
-    qmlRegisterUncreatableType<MissionController>   (kQGCControllers,                       1, 0, "MissionController",          kRefOnly);
-    qmlRegisterUncreatableType<GeoFenceController>  (kQGCControllers,                       1, 0, "GeoFenceController",         kRefOnly);
-    qmlRegisterUncreatableType<RallyPointController>(kQGCControllers,                       1, 0, "RallyPointController",       kRefOnly);
-    qmlRegisterUncreatableType<VisualMissionItem>   (kQGCControllers,                       1, 0, "VisualMissionItem",          kRefOnly);
+    qmlRegisterUncreatableType<Vehicle>                 (kQGCVehicle,                       1, 0, "Vehicle",                    kRefOnly);
+    qmlRegisterUncreatableType<MissionManager>          (kQGCVehicle,                       1, 0, "MissionManager",             kRefOnly);
+    qmlRegisterUncreatableType<ParameterManager>        (kQGCVehicle,                       1, 0, "ParameterManager",           kRefOnly);
+    qmlRegisterUncreatableType<VehicleObjectAvoidance>  (kQGCVehicle,                       1, 0, "VehicleObjectAvoidance",     kRefOnly);
+    qmlRegisterUncreatableType<QGCCameraManager>        (kQGCVehicle,                       1, 0, "QGCCameraManager",           kRefOnly);
+    qmlRegisterUncreatableType<QGCCameraControl>        (kQGCVehicle,                       1, 0, "QGCCameraControl",           kRefOnly);
+    qmlRegisterUncreatableType<QGCVideoStreamInfo>      (kQGCVehicle,                       1, 0, "QGCVideoStreamInfo",         kRefOnly);
+    qmlRegisterUncreatableType<LinkInterface>           (kQGCVehicle,                       1, 0, "LinkInterface",              kRefOnly);
+    qmlRegisterUncreatableType<MissionController>       (kQGCControllers,                   1, 0, "MissionController",          kRefOnly);
+    qmlRegisterUncreatableType<GeoFenceController>      (kQGCControllers,                   1, 0, "GeoFenceController",         kRefOnly);
+    qmlRegisterUncreatableType<RallyPointController>    (kQGCControllers,                   1, 0, "RallyPointController",       kRefOnly);
 
-    qmlRegisterUncreatableType<CoordinateVector>    ("QGroundControl",                      1, 0, "CoordinateVector",           kRefOnly);
-    qmlRegisterUncreatableType<QmlObjectListModel>  ("QGroundControl",                      1, 0, "QmlObjectListModel",         kRefOnly);
-    qmlRegisterUncreatableType<MissionCommandTree>  ("QGroundControl",                      1, 0, "MissionCommandTree",         kRefOnly);
-    qmlRegisterUncreatableType<CameraCalc>          ("QGroundControl",                      1, 0, "CameraCalc",                 kRefOnly);
+    qmlRegisterUncreatableType<MissionItem>         (kQGroundControl,                       1, 0, "MissionItem",                kRefOnly);
+    qmlRegisterUncreatableType<VisualMissionItem>   (kQGroundControl,                       1, 0, "VisualMissionItem",          kRefOnly);
+    qmlRegisterUncreatableType<CoordinateVector>    (kQGroundControl,                       1, 0, "CoordinateVector",           kRefOnly);
+    qmlRegisterUncreatableType<QmlObjectListModel>  (kQGroundControl,                       1, 0, "QmlObjectListModel",         kRefOnly);
+    qmlRegisterUncreatableType<MissionCommandTree>  (kQGroundControl,                       1, 0, "MissionCommandTree",         kRefOnly);
+    qmlRegisterUncreatableType<CameraCalc>          (kQGroundControl,                       1, 0, "CameraCalc",                 kRefOnly);
+    qmlRegisterUncreatableType<LogReplayLink>       (kQGroundControl,                       1, 0, "LogReplayLink",              kRefOnly);
+    qmlRegisterType<LogReplayLinkController>        (kQGroundControl,                       1, 0, "LogReplayLinkController");
+#if defined(QGC_ENABLE_MAVLINK_INSPECTOR)
+    qmlRegisterUncreatableType<MAVLinkChartController> (kQGroundControl,                    1, 0, "MAVLinkChart",               kRefOnly);
+#endif
+#if defined(QGC_ENABLE_PAIRING)
+    qmlRegisterUncreatableType<PairingManager>      (kQGroundControl,                       1, 0, "PairingManager",             kRefOnly);
+#endif
 
     qmlRegisterUncreatableType<AutoPilotPlugin>     ("QGroundControl.AutoPilotPlugin",      1, 0, "AutoPilotPlugin",            kRefOnly);
     qmlRegisterUncreatableType<VehicleComponent>    ("QGroundControl.AutoPilotPlugin",      1, 0, "VehicleComponent",           kRefOnly);
@@ -435,6 +515,7 @@ void QGCApplication::_initCommon(void)
 
     qmlRegisterUncreatableType<QGCMapPolygon>       ("QGroundControl.FlightMap",            1, 0, "QGCMapPolygon",              kRefOnly);
     qmlRegisterUncreatableType<QGCGeoBoundingCube>  ("QGroundControl.FlightMap",            1, 0, "QGCGeoBoundingCube",         kRefOnly);
+    qmlRegisterUncreatableType<TrajectoryPoints>    ("QGroundControl.FlightMap",            1, 0, "TrajectoryPoints",           kRefOnly);
 
     qmlRegisterType<QGCMapCircle>                   ("QGroundControl.FlightMap",            1, 0, "QGCMapCircle");
 
@@ -451,37 +532,40 @@ void QGCApplication::_initCommon(void)
     qmlRegisterType<EditPositionDialogController>   (kQGCControllers,                       1, 0, "EditPositionDialogController");
 
 #ifndef __mobile__
-    qmlRegisterType<ViewWidgetController>           (kQGCControllers,                       1, 0, "ViewWidgetController");
-    qmlRegisterType<CustomCommandWidgetController>  (kQGCControllers,                       1, 0, "CustomCommandWidgetController");
 #ifndef NO_SERIAL_LINK
     qmlRegisterType<FirmwareUpgradeController>      (kQGCControllers,                       1, 0, "FirmwareUpgradeController");
 #endif
+#endif
     qmlRegisterType<GeoTagController>               (kQGCControllers,                       1, 0, "GeoTagController");
     qmlRegisterType<MavlinkConsoleController>       (kQGCControllers,                       1, 0, "MavlinkConsoleController");
+#if defined(QGC_ENABLE_MAVLINK_INSPECTOR)
+    qmlRegisterType<MAVLinkInspectorController>     (kQGCControllers,                       1, 0, "MAVLinkInspectorController");
 #endif
-
     // Register Qml Singletons
     qmlRegisterSingletonType<QGroundControlQmlGlobal>   ("QGroundControl",                          1, 0, "QGroundControl",         qgroundcontrolQmlGlobalSingletonFactory);
     qmlRegisterSingletonType<ScreenToolsController>     ("QGroundControl.ScreenToolsController",    1, 0, "ScreenToolsController",  screenToolsControllerSingletonFactory);
     qmlRegisterSingletonType<ShapeFileHelper>           ("QGroundControl.ShapeFileHelper",          1, 0, "ShapeFileHelper",        shapeFileHelperSingletonFactory);
 }
 
-bool QGCApplication::_initForNormalAppBoot(void)
+bool QGCApplication::_initForNormalAppBoot()
 {
+
+    if(QFontDatabase::addApplicationFont(":/fonts/opensans") < 0) {
+        qWarning() << "Could not load /fonts/opensans font";
+    }
+    if(QFontDatabase::addApplicationFont(":/fonts/opensans-demibold") < 0) {
+        qWarning() << "Could not load /fonts/opensans-demibold font";
+    }
+
     QSettings settings;
 
-    _loadCurrentStyleSheet();
-
-    // Exit main application when last window is closed
-    connect(this, &QGCApplication::lastWindowClosed, this, QGCApplication::quit);
-
-#ifdef __mobile__
     _qmlAppEngine = toolbox()->corePlugin()->createRootWindow(this);
-#else
-    // Start the user interface
-    MainWindow* mainWindow = MainWindow::_create();
-    Q_CHECK_PTR(mainWindow);
-#endif
+
+    // Safe to show popup error messages now that main window is created
+    UASMessageHandler* msgHandler = qgcApp()->toolbox()->uasMessageHandler();
+    if (msgHandler) {
+        msgHandler->showErrorsInToolbar();
+    }
 
     // Now that main window is up check for lost log files
     connect(this, &QGCApplication::checkForLostLogFiles, toolbox()->mavlinkProtocol(), &MAVLinkProtocol::checkForLostLogFiles);
@@ -510,7 +594,7 @@ bool QGCApplication::_initForNormalAppBoot(void)
     return true;
 }
 
-bool QGCApplication::_initForUnitTests(void)
+bool QGCApplication::_initForUnitTests()
 {
     return true;
 }
@@ -533,30 +617,19 @@ QGCApplication* qgcApp(void)
     return QGCApplication::_app;
 }
 
-void QGCApplication::informationMessageBoxOnMainThread(const QString& title, const QString& msg)
+void QGCApplication::informationMessageBoxOnMainThread(const QString& /*title*/, const QString& msg)
 {
-    Q_UNUSED(title);
     showMessage(msg);
 }
 
-void QGCApplication::warningMessageBoxOnMainThread(const QString& title, const QString& msg)
+void QGCApplication::warningMessageBoxOnMainThread(const QString& /*title*/, const QString& msg)
 {
-#ifdef __mobile__
-    Q_UNUSED(title)
     showMessage(msg);
-#else
-    QGCMessageBox::warning(title, msg);
-#endif
 }
 
-void QGCApplication::criticalMessageBoxOnMainThread(const QString& title, const QString& msg)
+void QGCApplication::criticalMessageBoxOnMainThread(const QString& /*title*/, const QString& msg)
 {
-#ifdef __mobile__
-    Q_UNUSED(title)
     showMessage(msg);
-#else
-    QGCMessageBox::critical(title, msg);
-#endif
 }
 
 void QGCApplication::saveTelemetryLogOnMainThread(QString tempLogfile)
@@ -572,7 +645,7 @@ void QGCApplication::saveTelemetryLogOnMainThread(QString tempLogfile)
 
         int tryIndex = 1;
         QString saveFileName = nameFormat.arg(
-            QDateTime::currentDateTime().toString(dtFormat)).arg("").arg(toolbox()->settingsManager()->appSettings()->telemetryFileExtension);
+            QDateTime::currentDateTime().toString(dtFormat)).arg(QStringLiteral("")).arg(toolbox()->settingsManager()->appSettings()->telemetryFileExtension);
         while (saveDir.exists(saveFileName)) {
             saveFileName = nameFormat.arg(
                 QDateTime::currentDateTime().toString(dtFormat)).arg(QStringLiteral(".%1").arg(tryIndex++)).arg(toolbox()->settingsManager()->appSettings()->telemetryFileExtension);
@@ -582,99 +655,44 @@ void QGCApplication::saveTelemetryLogOnMainThread(QString tempLogfile)
         QFile tempFile(tempLogfile);
         if (!tempFile.copy(saveFilePath)) {
             QString error = tr("Unable to save telemetry log. Error copying telemetry to '%1': '%2'.").arg(saveFilePath).arg(tempFile.errorString());
-#ifndef __mobile__
-            QGCMessageBox::warning(tr("Telemetry Save Error"), error);
-#else
             showMessage(error);
-#endif
         }
     }
     QFile::remove(tempLogfile);
 }
 
-void QGCApplication::checkTelemetrySavePathOnMainThread(void)
+void QGCApplication::checkTelemetrySavePathOnMainThread()
 {
     // This is called with an active vehicle so don't pop message boxes which holds ui thread
     _checkTelemetrySavePath(false /* useMessageBox */);
 }
 
-bool QGCApplication::_checkTelemetrySavePath(bool useMessageBox)
+bool QGCApplication::_checkTelemetrySavePath(bool /*useMessageBox*/)
 {
-    QString errorTitle = tr("Telemetry save error");
-
     QString saveDirPath = _toolbox->settingsManager()->appSettings()->telemetrySavePath();
     if (saveDirPath.isEmpty()) {
         QString error = tr("Unable to save telemetry log. Application save directory is not set.");
-#ifndef __mobile__
-        if (useMessageBox) {
-            QGCMessageBox::warning(errorTitle, error);
-        } else {
-#endif
-            Q_UNUSED(useMessageBox);
-            showMessage(error);
-#ifndef __mobile__
-        }
-#endif
+        showMessage(error);
         return false;
     }
 
     QDir saveDir(saveDirPath);
     if (!saveDir.exists()) {
         QString error = tr("Unable to save telemetry log. Telemetry save directory \"%1\" does not exist.").arg(saveDirPath);
-#ifndef __mobile__
-        if (useMessageBox) {
-            QGCMessageBox::warning(errorTitle, error);
-        } else {
-#endif
-            showMessage(error);
-#ifndef __mobile__
-        }
-#endif
+        showMessage(error);
         return false;
     }
 
     return true;
 }
 
-void QGCApplication::_loadCurrentStyleSheet(void)
-{
-#ifndef __mobile__
-    bool success = true;
-    QString styles;
-
-    // The dark style sheet is the master. Any other selected style sheet just overrides
-    // the colors of the master sheet.
-    QFile masterStyleSheet(_darkStyleFile);
-    if (masterStyleSheet.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        styles = masterStyleSheet.readAll();
-    } else {
-        qDebug() << "Unable to load master dark style sheet";
-        success = false;
-    }
-
-    if (success && !_toolbox->settingsManager()->appSettings()->indoorPalette()->rawValue().toBool()) {
-        // Load the slave light stylesheet.
-        QFile styleSheet(_lightStyleFile);
-        if (styleSheet.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            styles += styleSheet.readAll();
-        } else {
-            qWarning() << "Unable to load slave light sheet:";
-            success = false;
-        }
-    }
-
-    setStyleSheet(styles);
-
-    if (!success) {
-        // Fall back to plastique if we can't load our own
-        setStyle("plastique");
-    }
-#endif
-}
-
 void QGCApplication::reportMissingParameter(int componentId, const QString& name)
 {
-    _missingParams += QString("%1:%2").arg(componentId).arg(name);
+    QPair<int, QString>  missingParam(componentId, name);
+
+    if (!_missingParams.contains(missingParam)) {
+        _missingParams.append(missingParam);
+    }
     _missingParamsDelayedDisplayTimer.start();
 }
 
@@ -683,12 +701,14 @@ void QGCApplication::_missingParamsDisplay(void)
 {
     if (_missingParams.count()) {
         QString params;
-        foreach (const QString &name, _missingParams) {
+        for (QPair<int, QString>& missingParam: _missingParams) {
+            QString param = QStringLiteral("%1:%2").arg(missingParam.first).arg(missingParam.second);
             if (params.isEmpty()) {
-                params += name;
+                params += param;
             } else {
-                params += QString(", %1").arg(name);
+                params += QStringLiteral(", %1").arg(param);
             }
+
         }
         _missingParams.clear();
 
@@ -698,22 +718,9 @@ void QGCApplication::_missingParamsDisplay(void)
 
 QObject* QGCApplication::_rootQmlObject()
 {
-#ifdef __mobile__
     if(_qmlAppEngine && _qmlAppEngine->rootObjects().size())
         return _qmlAppEngine->rootObjects()[0];
     return nullptr;
-#else
-    MainWindow * mainWindow = MainWindow::instance();
-    if (mainWindow) {
-        return mainWindow->rootQmlObject();
-    } else if (runningUnitTests()){
-        // Unit test can run without a main window
-        return nullptr;
-    } else {
-        qWarning() << "Why is MainWindow missing?";
-        return nullptr;
-    }
-#endif
 }
 
 
@@ -723,32 +730,35 @@ void QGCApplication::showMessage(const QString& message)
     if (message.startsWith(QStringLiteral("PreArm")) || message.startsWith(QStringLiteral("preflight"), Qt::CaseInsensitive)) {
         return;
     }
-
     QObject* rootQmlObject = _rootQmlObject();
-
     if (rootQmlObject) {
         QVariant varReturn;
         QVariant varMessage = QVariant::fromValue(message);
-
         QMetaObject::invokeMethod(_rootQmlObject(), "showMessage", Q_RETURN_ARG(QVariant, varReturn), Q_ARG(QVariant, varMessage));
-#ifndef __mobile__
-    } else if (runningUnitTests()){
-        // Unit test can run without a main window which will lead to no root qml object. Use QGCMessageBox instead
-        QGCMessageBox::information("Unit Test", message);
-#endif
+    } else if (runningUnitTests()) {
+        // Unit tests can run without UI
+        qDebug() << "QGCApplication::showMessage unittest" << message;
     } else {
         qWarning() << "Internal error";
     }
 }
 
-void QGCApplication::showSetupView(void)
+QQuickItem* QGCApplication::mainRootWindow()
+{
+    if(!_mainRootWindow) {
+        _mainRootWindow = reinterpret_cast<QQuickItem*>(_rootQmlObject());
+    }
+    return _mainRootWindow;
+}
+
+void QGCApplication::showSetupView()
 {
     if(_rootQmlObject()) {
         QMetaObject::invokeMethod(_rootQmlObject(), "showSetupView");
     }
 }
 
-void QGCApplication::qmlAttemptWindowClose(void)
+void QGCApplication::qmlAttemptWindowClose()
 {
     if(_rootQmlObject()) {
         QMetaObject::invokeMethod(_rootQmlObject(), "attemptWindowClose");
@@ -757,10 +767,12 @@ void QGCApplication::qmlAttemptWindowClose(void)
 
 bool QGCApplication::isInternetAvailable()
 {
-    return getQGCMapEngine()->isInternetActive();
+    if(_toolbox->settingsManager()->appSettings()->checkInternet()->rawValue().toBool())
+        return getQGCMapEngine()->isInternetActive();
+    return true;
 }
 
-void QGCApplication::_checkForNewVersion(void)
+void QGCApplication::_checkForNewVersion()
 {
 #ifndef __mobile__
     if (!_runningUnitTests) {
@@ -777,10 +789,8 @@ void QGCApplication::_checkForNewVersion(void)
 #endif
 }
 
-void QGCApplication::_currentVersionDownloadFinished(QString remoteFile, QString localFile)
+void QGCApplication::_currentVersionDownloadFinished(QString /*remoteFile*/, QString localFile)
 {
-    Q_UNUSED(remoteFile);
-
 #ifdef __mobile__
     Q_UNUSED(localFile);
 #else
@@ -796,7 +806,8 @@ void QGCApplication::_currentVersionDownloadFinished(QString remoteFile, QString
             if (_majorVersion < majorVersion ||
                     (_majorVersion == majorVersion && _minorVersion < minorVersion) ||
                     (_majorVersion == majorVersion && _minorVersion == minorVersion && _buildVersion < buildVersion)) {
-                QGCMessageBox::information(tr("New Version Available"), tr("There is a newer version of %1 available. You can download it from %2.").arg(applicationName()).arg(toolbox()->corePlugin()->stableDownloadLocation()));
+                //-- TODO
+                ///QGCMessageBox::information(tr("New Version Available"), tr("There is a newer version of %1 available. You can download it from %2.").arg(applicationName()).arg(toolbox()->corePlugin()->stableDownloadLocation()));
             }
         }
     }
@@ -805,9 +816,8 @@ void QGCApplication::_currentVersionDownloadFinished(QString remoteFile, QString
 #endif
 }
 
-void QGCApplication::_currentVersionDownloadError(QString errorMsg)
+void QGCApplication::_currentVersionDownloadError(QString /*errorMsg*/)
 {
-    Q_UNUSED(errorMsg);
     _currentVersionDownload->deleteLater();
 }
 
@@ -839,7 +849,7 @@ void QGCApplication::_onGPSDisconnect()
 void QGCApplication::_gpsSurveyInStatus(float duration, float accuracyMM,  double latitude, double longitude, float altitude, bool valid, bool active)
 {
     _gpsRtkFactGroup->currentDuration()->setRawValue(duration);
-    _gpsRtkFactGroup->currentAccuracy()->setRawValue(accuracyMM/1000.0);
+    _gpsRtkFactGroup->currentAccuracy()->setRawValue(static_cast<double>(accuracyMM) / 1000.0);
     _gpsRtkFactGroup->currentLatitude()->setRawValue(latitude);
     _gpsRtkFactGroup->currentLongitude()->setRawValue(longitude);
     _gpsRtkFactGroup->currentAltitude()->setRawValue(altitude);

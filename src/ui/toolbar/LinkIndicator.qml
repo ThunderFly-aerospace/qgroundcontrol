@@ -8,8 +8,8 @@
  ****************************************************************************/
 
 
-import QtQuick          2.3
-import QtQuick.Controls 1.2
+import QtQuick                              2.11
+import QtQuick.Controls                     2.4
 
 import QGroundControl                       1.0
 import QGroundControl.Controls              1.0
@@ -25,39 +25,38 @@ Item {
     anchors.bottom: parent.bottom
     width:          priorityLinkSelector.width
 
-    property var _activeVehicle: QGroundControl.multiVehicleManager.activeVehicle
-    property bool _visible: false
+    property bool showIndicator: false
 
     QGCLabel {
         id:                     priorityLinkSelector
-        text:                   _activeVehicle ? _activeVehicle.priorityLinkName : qsTr("N/A", "No data to display")
+        text:                   activeVehicle ? activeVehicle.priorityLinkName : qsTr("N/A", "No data to display")
         font.pointSize:         ScreenTools.mediumFontPointSize
         color:                  qgcPal.buttonText
         anchors.verticalCenter: parent.verticalCenter
-        visible:                _visible
-        Menu {
+        QGCMenu {
             id: linkSelectionMenu
         }
         Component {
             id: linkSelectionMenuItemComponent
-            MenuItem {
-                onTriggered: _activeVehicle.priorityLinkName = text
+            QGCMenuItem {
+                onTriggered: activeVehicle.priorityLinkName = text
             }
         }
         property var linkSelectionMenuItems: []
         function updatelinkSelectionMenu() {
-            if (_activeVehicle) {
+            if (activeVehicle) {
                 // Remove old menu items
-                for (var i = 0; i < linkSelectionMenuItems.length; i++) {
+                var i
+                for (i = 0; i < linkSelectionMenuItems.length; i++) {
                     linkSelectionMenu.removeItem(linkSelectionMenuItems[i])
                 }
                 linkSelectionMenuItems.length = 0
 
                 // Add new items
                 var has_hl = false;
-                var links = _activeVehicle.links
-                for (var i = 0; i < links.length; i++) {
-                    var menuItem = linkSelectionMenuItemComponent.createObject(null, { "text": links[i].getName(), "enabled": links[i].link_active(_activeVehicle.id)})
+                var links = activeVehicle.links
+                for (i = 0; i < links.length; i++) {
+                    var menuItem = linkSelectionMenuItemComponent.createObject(null, { "text": links[i].getName(), "enabled": links[i].link_active(activeVehicle.id)})
                     linkSelectionMenuItems.push(menuItem)
                     linkSelectionMenu.insertItem(i, menuItem)
 
@@ -66,7 +65,7 @@ Item {
                     }
                 }
 
-                _visible = links.length > 1 && has_hl
+                showIndicator = links.length > 1 && has_hl
             }
         }
 
@@ -78,17 +77,17 @@ Item {
         }
 
         Connections {
-            target:                 _activeVehicle
+            target:                 activeVehicle
             onLinksChanged:         priorityLinkSelector.updatelinkSelectionMenu()
         }
 
         Connections {
-            target:                     _activeVehicle
+            target:                     activeVehicle
             onLinksPropertiesChanged:   priorityLinkSelector.updatelinkSelectionMenu()
         }
 
         MouseArea {
-            visible:        _activeVehicle
+            visible:        activeVehicle
             anchors.fill:   parent
             onClicked:      linkSelectionMenu.popup()
         }

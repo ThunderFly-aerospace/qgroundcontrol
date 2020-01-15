@@ -156,6 +156,7 @@ public:
     static MockLink* startAPMArduCopterMockLink  (bool sendStatusText, MockConfiguration::FailureMode_t failureMode = MockConfiguration::FailNone);
     static MockLink* startAPMArduPlaneMockLink   (bool sendStatusText, MockConfiguration::FailureMode_t failureMode = MockConfiguration::FailNone);
     static MockLink* startAPMArduSubMockLink     (bool sendStatusText, MockConfiguration::FailureMode_t failureMode = MockConfiguration::FailNone);
+    static MockLink* startAPMArduRoverMockLink   (bool sendStatusText, MockConfiguration::FailureMode_t failureMode = MockConfiguration::FailNone);
 
 private slots:
     virtual void _writeBytes(const QByteArray bytes);
@@ -195,6 +196,7 @@ private:
     void _sendHomePosition(void);
     void _sendGpsRawInt(void);
     void _sendVibration(void);
+    void _sendSysStatus(void);
     void _sendStatusTextMessages(void);
     void _respondWithAutopilotVersion(void);
     void _sendRCChannels(void);
@@ -203,6 +205,7 @@ private:
     void _sendADSBVehicles(void);
     void _moveADSBVehicle(void);
 
+    static MockLink* _startMockLinkWorker(QString configName, MAV_AUTOPILOT firmwareType, MAV_TYPE vehicleType, bool sendStatusText, MockConfiguration::FailureMode_t failureMode);
     static MockLink* _startMockLink(MockConfiguration* mockConfig);
 
     MockLinkMissionItemHandler  _missionItemHandler;
@@ -223,6 +226,9 @@ private:
     uint8_t     _mavBaseMode;
     uint32_t    _mavCustomMode;
     uint8_t     _mavState;
+
+    QTime       _runningTime;
+    int8_t      _batteryRemaining = 100;
 
     MAV_AUTOPILOT       _firmwareType;
     MAV_TYPE            _vehicleType;

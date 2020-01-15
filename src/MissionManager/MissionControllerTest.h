@@ -36,8 +36,6 @@ private slots:
     void _testLoadJsonSectionAvailable(void);
     void _testEmptyVehicleAPM(void);
     void _testEmptyVehiclePX4(void);
-    void _testAddWayppointAPM(void);
-    void _testAddWayppointPX4(void);
 
 private:
 #if 0
@@ -70,13 +68,11 @@ private:
 
     enum {
         visualItemsChangedSignalIndex = 0,
-        waypointLinesChangedSignalIndex,
         missionControllerMaxSignalIndex
     };
 
     enum {
         visualItemsChangedSignalMask =                 1 << visualItemsChangedSignalIndex,
-        waypointLinesChangedSignalMask =                1 << waypointLinesChangedSignalIndex,
     };
 
     MultiSignalSpy*     _multiSpyMissionController;

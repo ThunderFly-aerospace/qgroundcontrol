@@ -33,7 +33,7 @@ class APMSubmarineFactGroup : public FactGroup
     Q_OBJECT
 
 public:
-    APMSubmarineFactGroup(QObject* parent = NULL);
+    APMSubmarineFactGroup(QObject* parent = nullptr);
 
     Q_PROPERTY(Fact* camTilt             READ camTilt             CONSTANT)
     Q_PROPERTY(Fact* tetherTurns         READ tetherTurns         CONSTANT)
@@ -96,7 +96,6 @@ public:
         RESERVED_18       = 18,
         MANUAL            = 19
     };
-    static const int modeCount = 20;
 
     APMSubMode(uint32_t mode, bool settable);
 };
@@ -137,11 +136,13 @@ public:
     const QVariantList& toolBarIndicators(const Vehicle* vehicle) final;
     bool  adjustIncomingMavlinkMessage(Vehicle* vehicle, mavlink_message_t* message) final;
     virtual QMap<QString, FactGroup*>* factGroups(void) final;
+    void adjustMetaData(MAV_TYPE vehicleType, FactMetaData* metaData) override final;
 
 
 private:
     QVariantList _toolBarIndicators;
     static bool _remapParamNameIntialized;
+    QMap<QString, QString> _factRenameMap;
     static FirmwarePlugin::remapParamNameMajorVersionMap_t  _remapParamName;
     void _handleNamedValueFloat(mavlink_message_t* message);
     void _handleMavlinkMessage(mavlink_message_t* message);

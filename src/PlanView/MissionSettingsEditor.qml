@@ -25,11 +25,11 @@ Rectangle {
     property var    _missionVehicle:                _masterControler.controllerVehicle
     property bool   _vehicleHasHomePosition:        _missionVehicle.homePosition.isValid
     property bool   _offlineEditing:                _missionVehicle.isOfflineEditingVehicle
-    property bool   _showOfflineVehicleCombos:      _multipleFirmware
     property bool   _enableOfflineVehicleCombos:    _offlineEditing && _noMissionItemsAdded
     property bool   _showCruiseSpeed:               !_missionVehicle.multiRotor
     property bool   _showHoverSpeed:                _missionVehicle.multiRotor || _missionVehicle.vtol
     property bool   _multipleFirmware:              QGroundControl.supportedFirmwareCount > 2
+    property bool   _multipleVehicleTypes:          QGroundControl.supportedVehicleCount > 1
     property real   _fieldWidth:                    ScreenTools.defaultFontPixelWidth * 16
     property bool   _mobile:                        ScreenTools.isMobile
     property var    _savePath:                      QGroundControl.settingsManager.appSettings.missionSavePath
@@ -108,30 +108,12 @@ Rectangle {
             }
 
             SectionHeader {
-                id:         missionEndHeader
-                text:       qsTr("Mission End")
-                checked:    true
-            }
-
-            Column {
+                id:             vehicleInfoSectionHeader
                 anchors.left:   parent.left
                 anchors.right:  parent.right
-                spacing:        _margin
-                visible:        missionEndHeader.checked
-
-                QGCCheckBox {
-                    text:       qsTr("Return To Launch")
-                    checked:    missionItem.missionEndRTL
-                    onClicked:  missionItem.missionEndRTL = checked
-                }
-            }
-
-
-            SectionHeader {
-                id:         vehicleInfoSectionHeader
-                text:       qsTr("Vehicle Info")
-                visible:    _offlineEditing && !_waypointsOnlyMode
-                checked:    false
+                text:           qsTr("Vehicle Info")
+                visible:        _offlineEditing && !_waypointsOnlyMode
+                checked:        false
             }
 
             GridLayout {
@@ -145,26 +127,26 @@ Rectangle {
                 QGCLabel {
                     text:               _firmwareLabel
                     Layout.fillWidth:   true
-                    visible:            _showOfflineVehicleCombos
+                    visible:            _multipleFirmware
                 }
                 FactComboBox {
                     fact:                   QGroundControl.settingsManager.appSettings.offlineEditingFirmwareType
                     indexModel:             false
                     Layout.preferredWidth:  _fieldWidth
-                    visible:                _showOfflineVehicleCombos
+                    visible:                _multipleFirmware
                     enabled:                _enableOfflineVehicleCombos
                 }
 
                 QGCLabel {
                     text:               _vehicleLabel
                     Layout.fillWidth:   true
-                    visible:            _showOfflineVehicleCombos
+                    visible:            _multipleVehicleTypes
                 }
                 FactComboBox {
                     fact:                   QGroundControl.settingsManager.appSettings.offlineEditingVehicleType
                     indexModel:             false
                     Layout.preferredWidth:  _fieldWidth
-                    visible:                _showOfflineVehicleCombos
+                    visible:                _multipleVehicleTypes
                     enabled:                _enableOfflineVehicleCombos
                 }
 
@@ -192,10 +174,12 @@ Rectangle {
             } // GridLayout
 
             SectionHeader {
-                id:         plannedHomePositionSection
-                text:       qsTr("Planned Home Position")
-                visible:    !_vehicleHasHomePosition
-                checked:    false
+                id:             plannedHomePositionSection
+                anchors.left:   parent.left
+                anchors.right:  parent.right
+                text:           qsTr("Launch Position")
+                visible:        !_vehicleHasHomePosition
+                checked:        false
             }
 
             Column {
@@ -229,7 +213,7 @@ Rectangle {
                 }
 
                 QGCButton {
-                    text:                       qsTr("Set Home To Map Center")
+                    text:                       qsTr("Set To Map Center")
                     onClicked:                  missionItem.coordinate = map.center
                     anchors.horizontalCenter:   parent.horizontalCenter
                 }

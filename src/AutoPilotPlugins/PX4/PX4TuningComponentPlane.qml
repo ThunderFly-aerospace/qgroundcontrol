@@ -29,20 +29,18 @@ SetupPage {
             width: availableWidth
 
             Component.onCompleted: {
+                // We use QtCharts only on Desktop platforms
                 showAdvanced = !ScreenTools.isMobile
             }
 
             FactPanelController {
                 id:         controller
-                factPanel:  tuningPage.viewPanel
             }
 
             // Standard tuning page
             FactSliderPanel {
                 width:          availableWidth
-                qgcViewPanel:   tuningPage.viewPanel
                 visible:        !advanced
-
                 sliderModel: ListModel {
                     ListElement {
                         title:          qsTr("Cruise throttle")
@@ -54,7 +52,6 @@ SetupPage {
                     }
                 }
             }
-
 
             Loader {
                 anchors.left:       parent.left

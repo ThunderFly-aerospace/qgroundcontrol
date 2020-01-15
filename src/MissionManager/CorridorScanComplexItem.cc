@@ -51,6 +51,8 @@ CorridorScanComplexItem::CorridorScanComplexItem(Vehicle* vehicle, bool flyView,
     connect(&_corridorPolyline,     &QGCMapPolyline::pathChanged,   this, &CorridorScanComplexItem::_rebuildCorridorPolygon);
     connect(&_corridorWidthFact,    &Fact::valueChanged,            this, &CorridorScanComplexItem::_rebuildCorridorPolygon);
 
+    connect(&_corridorPolyline,     &QGCMapPolyline::isValidChanged,this, &CorridorScanComplexItem::readyForSaveStateChanged);
+
     if (!kmlFile.isEmpty()) {
         _corridorPolyline.loadKMLFile(kmlFile);
         _corridorPolyline.setDirty(false);
@@ -62,7 +64,7 @@ void CorridorScanComplexItem::save(QJsonArray&  planItems)
 {
     QJsonObject saveObject;
 
-    _save(saveObject);
+    TransectStyleComplexItem::_save(saveObject);
 
     saveObject[JsonHelper::jsonVersionKey] =                    2;
     saveObject[VisualMissionItem::jsonTypeKey] =                VisualMissionItem::jsonTypeComplexItemValue;
@@ -115,7 +117,7 @@ bool CorridorScanComplexItem::load(const QJsonObject& complexObject, int sequenc
 
     setSequenceNumber(sequenceNumber);
 
-    if (!_load(complexObject, errorString)) {
+    if (!_load(complexObject, false /* forPresets */, errorString)) {
         _ignoreRecalc = false;
         return false;
     }
@@ -124,9 +126,13 @@ bool CorridorScanComplexItem::load(const QJsonObject& complexObject, int sequenc
 
     _entryPoint = complexObject[_jsonEntryPointKey].toInt();
 
-    _rebuildTransects();
-
     _ignoreRecalc = false;
+
+    _recalcComplexDistance();
+    if (_cameraShots == 0) {
+        // Shot count was possibly not available from plan file
+        _recalcCameraShots();
+    }
 
     return true;
 }
@@ -138,9 +144,8 @@ bool CorridorScanComplexItem::specifiesCoordinate(void) const
 
 int CorridorScanComplexItem::_transectCount(void) const
 {
-    double transectSpacing = _cameraCalc.adjustedFootprintSide()->rawValue().toDouble();
     double fullWidth = _corridorWidthFact.rawValue().toDouble();
-    return fullWidth > 0.0 ? qCeil(fullWidth / transectSpacing) : 1;
+    return fullWidth > 0.0 ? qCeil(fullWidth / _transectSpacing()) : 1;
 }
 
 void CorridorScanComplexItem::_appendLoadedMissionItems(QList<MissionItem*>& items, QObject* missionItemParent)
@@ -331,13 +336,13 @@ void CorridorScanComplexItem::_rebuildTransectsPhase1(void)
     if (_loadedMissionItemsParent) {
         _loadedMissionItems.clear();
         _loadedMissionItemsParent->deleteLater();
-        _loadedMissionItemsParent = NULL;
+        _loadedMissionItemsParent = nullptr;
     }
 
     _transects.clear();
     _transectsPathHeightInfo.clear();
 
-    double transectSpacing = _cameraCalc.adjustedFootprintSide()->rawValue().toDouble();
+    double transectSpacing = _transectSpacing();
     double fullWidth = _corridorWidthFact.rawValue().toDouble();
     double halfWidth = fullWidth / 2.0;
     int transectCount = _transectCount();
@@ -461,14 +466,17 @@ void CorridorScanComplexItem::_rebuildTransectsPhase1(void)
     }
 }
 
-void CorridorScanComplexItem::_rebuildTransectsPhase2(void)
+void CorridorScanComplexItem::_recalcComplexDistance(void)
 {
-    // Calculate distance flown for complex item
     _complexDistance = 0;
     for (int i=0; i<_visualTransectPoints.count() - 1; i++) {
         _complexDistance += _visualTransectPoints[i].value<QGeoCoordinate>().distanceTo(_visualTransectPoints[i+1].value<QGeoCoordinate>());
     }
+    emit complexDistanceChanged();
+}
 
+void CorridorScanComplexItem::_recalcCameraShots(void)
+{
     double triggerDistance = _cameraCalc.adjustedFootprintFrontal()->rawValue().toDouble();
     if (triggerDistance == 0) {
         _cameraShots = 0;
@@ -480,22 +488,28 @@ void CorridorScanComplexItem::_rebuildTransectsPhase2(void)
             _cameraShots = singleTransectImageCount * _transectCount();
         }
     }
-
-    _coordinate = _visualTransectPoints.count() ? _visualTransectPoints.first().value<QGeoCoordinate>() : QGeoCoordinate();
-    _exitCoordinate = _visualTransectPoints.count() ? _visualTransectPoints.last().value<QGeoCoordinate>() : QGeoCoordinate();
-
     emit cameraShotsChanged();
-    emit complexDistanceChanged();
-    emit coordinateChanged(_coordinate);
-    emit exitCoordinateChanged(_exitCoordinate);
 }
 
-bool CorridorScanComplexItem::readyForSave(void) const
+CorridorScanComplexItem::ReadyForSaveState CorridorScanComplexItem::readyForSaveState(void) const
 {
-    return TransectStyleComplexItem::readyForSave();
+    return TransectStyleComplexItem::readyForSaveState();
 }
 
 double CorridorScanComplexItem::timeBetweenShots(void)
 {
     return _cruiseSpeed == 0 ? 0 : _cameraCalc.adjustedFootprintFrontal()->rawValue().toDouble() / _cruiseSpeed;
+}
+
+double CorridorScanComplexItem::_transectSpacing(void) const
+{
+    double transectSpacing = _cameraCalc.adjustedFootprintSide()->rawValue().toDouble();
+    if (transectSpacing < 0.5) {
+        // We can't let spacing get too small otherwise we will end up with too many transects.
+        // So we limit to 0.5 meter spacing as min and set to huge value which will cause a single
+        // transect to be added.
+        transectSpacing = 100000;
+    }
+
+    return transectSpacing;
 }

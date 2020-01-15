@@ -25,10 +25,6 @@ import QGroundControl.ScreenTools   1.0
 Item {
     id: root
 
-    // The following properties must be pushed in from the Loader
-    //property var qgcView      - QGCView control
-    //property var qgcViewPanel - QGCViewPanel control
-
     readonly property bool _shortText: ScreenTools.isTinyScreen
 
     // User visible strings
@@ -84,7 +80,7 @@ Item {
     readonly property string mrLoiterModeDescription:   qsTr("The multirotor hovers at the current position and altitude. ")
 
     readonly property string returnModeName:            qsTr("Return")
-    readonly property string returnModeDescription:     qsTr("The vehicle returns to the home position, loiters and then lands. ")
+    readonly property string returnModeDescription:     qsTr("The vehicle returns to the launch position, loiters and then lands. ")
 
     readonly property string offboardModeName:          qsTr("Offboard")
     readonly property string offboardModeDescription:   qsTr("All flight control aspects are controlled by an offboard system.")
@@ -93,8 +89,6 @@ Item {
 
     PX4AdvancedFlightModesController {
         id:         controller
-        factPanel:  qgcViewPanel
-
         onModeRowsChanged: recalcModePositions()
     }
 

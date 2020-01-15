@@ -78,6 +78,7 @@ void BluetoothLink::_writeBytes(const QByteArray bytes)
 {
     if (_targetSocket) {
         if(_targetSocket->write(bytes) > 0) {
+            emit bytesSent(this, bytes);
             _logOutputDataRate(bytes.size(), QDateTime::currentMSecsSinceEpoch());
         } else {
             qWarning() << "Bluetooth write error";
@@ -270,7 +271,7 @@ QString BluetoothConfiguration::settingsTitle()
 void BluetoothConfiguration::copyFrom(LinkConfiguration *source)
 {
     LinkConfiguration::copyFrom(source);
-    BluetoothConfiguration* usource = dynamic_cast<BluetoothConfiguration*>(source);
+    auto* usource = qobject_cast<BluetoothConfiguration*>(source);
     Q_ASSERT(usource != nullptr);
     _device = usource->device();
 }
@@ -303,7 +304,7 @@ void BluetoothConfiguration::loadSettings(QSettings& settings, const QString& ro
 void BluetoothConfiguration::updateSettings()
 {
     if(_link) {
-        BluetoothLink* ulink = dynamic_cast<BluetoothLink*>(_link);
+        auto* ulink = qobject_cast<BluetoothLink*>(_link);
         if(ulink) {
             ulink->_restartConnection();
         }

@@ -7,10 +7,6 @@
  *
  ****************************************************************************/
 
-
-/// @file
-///     @author Don Gagne <don@thegagnes.com>
-
 #include "CoordinateVector.h"
 
 CoordinateVector::CoordinateVector(QObject* parent)
@@ -46,5 +42,13 @@ void CoordinateVector::setCoordinate2(const QGeoCoordinate &coordinate)
     if (_coordinate2 != coordinate) {
         _coordinate2 = coordinate;
         emit coordinate2Changed(_coordinate2);
+    }
+}
+
+void CoordinateVector::setSpecialVisual(bool specialVisual)
+{
+    if (_specialVisual != specialVisual) {
+        _specialVisual = specialVisual;
+        emit specialVisualChanged(specialVisual);
     }
 }

@@ -29,6 +29,7 @@ QGCMapPolygon::QGCMapPolygon(QObject* parent)
     , _centerDrag           (false)
     , _ignoreCenterUpdates  (false)
     , _interactive          (false)
+    , _resetActive          (false)
 {
     _init();
 }
@@ -39,6 +40,7 @@ QGCMapPolygon::QGCMapPolygon(const QGCMapPolygon& other, QObject* parent)
     , _centerDrag           (false)
     , _ignoreCenterUpdates  (false)
     , _interactive          (false)
+    , _resetActive          (false)
 {
     *this = other;
 
@@ -49,7 +51,10 @@ void QGCMapPolygon::_init(void)
 {
     connect(&_polygonModel, &QmlObjectListModel::dirtyChanged, this, &QGCMapPolygon::_polygonModelDirtyChanged);
     connect(&_polygonModel, &QmlObjectListModel::countChanged, this, &QGCMapPolygon::_polygonModelCountChanged);
-    connect(this, &QGCMapPolygon::pathChanged, this, &QGCMapPolygon::_updateCenter);
+
+    connect(this, &QGCMapPolygon::pathChanged,  this, &QGCMapPolygon::_updateCenter);
+    connect(this, &QGCMapPolygon::countChanged, this, &QGCMapPolygon::isValidChanged);
+    connect(this, &QGCMapPolygon::countChanged, this, &QGCMapPolygon::isEmptyChanged);
 }
 
 const QGCMapPolygon& QGCMapPolygon::operator=(const QGCMapPolygon& other)
@@ -94,7 +99,7 @@ void QGCMapPolygon::adjustVertex(int vertexIndex, const QGeoCoordinate coordinat
     _polygonPath[vertexIndex] = QVariant::fromValue(coordinate);
     _polygonModel.value<QGCQGeoCoordinate*>(vertexIndex)->setCoordinate(coordinate);
     if (!_centerDrag) {
-        // When dragging center we don't signal path changed until add vertices are updated
+        // When dragging center we don't signal path changed until all vertices are updated
         emit pathChanged();
     }
     setDirty(true);
@@ -265,11 +270,14 @@ void QGCMapPolygon::appendVertices(const QList<QGeoCoordinate>& coordinates)
 {
     QList<QObject*> objects;
 
+    _beginResetIfNotActive();
     for (const QGeoCoordinate& coordinate: coordinates) {
         objects.append(new QGCQGeoCoordinate(coordinate, this));
         _polygonPath.append(QVariant::fromValue(coordinate));
     }
     _polygonModel.append(objects);
+    _endResetIfNotActive();
+
     emit pathChanged();
 }
 
@@ -340,7 +348,7 @@ void QGCMapPolygon::setCenter(QGeoCoordinate newCenter)
         }
 
         if (_centerDrag) {
-            // When center dragging signals are delayed until all vertices are updated
+            // When center dragging, signals from adjustVertext are not sent. So we need to signal here when all adjusting is complete.
             emit pathChanged();
         }
 
@@ -448,8 +456,10 @@ void QGCMapPolygon::offset(double distance)
     }
 
     // Update internals
+    _beginResetIfNotActive();
     clear();
     appendVertices(rgNewPolygon);
+    _endResetIfNotActive();
 }
 
 bool QGCMapPolygon::loadKMLOrSHPFile(const QString& file)
@@ -461,8 +471,10 @@ bool QGCMapPolygon::loadKMLOrSHPFile(const QString& file)
         return false;
     }
 
+    _beginResetIfNotActive();
     clear();
     appendVertices(rgCoords);
+    _endResetIfNotActive();
 
     return true;
 }
@@ -485,4 +497,61 @@ double QGCMapPolygon::area(void) const
         }
     }
     return 0.5 * fabs(coveredArea);
+}
+
+void QGCMapPolygon::verifyClockwiseWinding(void)
+{
+    if (_polygonPath.count() <= 2) {
+        return;
+    }
+
+    double sum = 0;
+    for (int i=0; i<_polygonPath.count(); i++) {
+        QGeoCoordinate coord1 = _polygonPath[i].value<QGeoCoordinate>();
+        QGeoCoordinate coord2 = (i == _polygonPath.count() - 1) ? _polygonPath[0].value<QGeoCoordinate>() : _polygonPath[i+1].value<QGeoCoordinate>();
+
+        sum += (coord2.longitude() - coord1.longitude()) * (coord2.latitude() + coord1.latitude());
+    }
+
+    if (sum < 0.0) {
+        // Winding is counter-clockwise and needs reversal
+
+        QList<QGeoCoordinate> rgReversed;
+        for (const QVariant& varCoord: _polygonPath) {
+            rgReversed.prepend(varCoord.value<QGeoCoordinate>());
+        }
+
+        _beginResetIfNotActive();
+        clear();
+        appendVertices(rgReversed);
+        _endResetIfNotActive();
+    }
+}
+
+void QGCMapPolygon::beginReset(void)
+{
+    _resetActive = true;
+    _polygonModel.beginReset();
+}
+
+void QGCMapPolygon::endReset(void)
+{
+    _resetActive = false;
+    _polygonModel.endReset();
+    emit pathChanged();
+    emit centerChanged(_center);
+}
+
+void QGCMapPolygon::_beginResetIfNotActive(void)
+{
+    if (!_resetActive) {
+        beginReset();
+    }
+}
+
+void QGCMapPolygon::_endResetIfNotActive(void)
+{
+    if (!_resetActive) {
+        endReset();
+    }
 }

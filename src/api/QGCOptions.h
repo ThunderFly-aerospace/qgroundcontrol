@@ -12,6 +12,7 @@
 #include <QObject>
 #include <QString>
 #include <QUrl>
+#include <QColor>
 
 /// @file
 ///     @brief Core Plugin Interface for QGroundControl - Application Options
@@ -22,13 +23,21 @@ class QGCOptions : public QObject
 {
     Q_OBJECT
 public:
-    QGCOptions(QObject* parent = NULL);
+    QGCOptions(QObject* parent = nullptr);
 
     Q_PROPERTY(bool                     combineSettingsAndSetup         READ combineSettingsAndSetup        CONSTANT)
     Q_PROPERTY(double                   toolbarHeightMultiplier         READ toolbarHeightMultiplier        CONSTANT)
     Q_PROPERTY(bool                     enablePlanViewSelector          READ enablePlanViewSelector         CONSTANT)
     Q_PROPERTY(CustomInstrumentWidget*  instrumentWidget                READ instrumentWidget               CONSTANT)
     Q_PROPERTY(QUrl                     flyViewOverlay                  READ flyViewOverlay                 CONSTANT)
+    Q_PROPERTY(QUrl                     preFlightChecklistUrl           READ preFlightChecklistUrl          CONSTANT)
+
+    Q_PROPERTY(QUrl                     mainToolbarUrl                  READ mainToolbarUrl                 CONSTANT)
+    Q_PROPERTY(QUrl                     planToolbarUrl                  READ planToolbarUrl                 CONSTANT)
+    Q_PROPERTY(QColor                   toolbarBackgroundLight          READ toolbarBackgroundLight         CONSTANT)
+    Q_PROPERTY(QColor                   toolbarBackgroundDark           READ toolbarBackgroundDark          CONSTANT)
+
+    Q_PROPERTY(QUrl                     planToolbarIndicatorsUrl        READ planToolbarIndicatorsUrl       CONSTANT)
     Q_PROPERTY(bool                     showSensorCalibrationCompass    READ showSensorCalibrationCompass   NOTIFY showSensorCalibrationCompassChanged)
     Q_PROPERTY(bool                     showSensorCalibrationGyro       READ showSensorCalibrationGyro      NOTIFY showSensorCalibrationGyroChanged)
     Q_PROPERTY(bool                     showSensorCalibrationAccel      READ showSensorCalibrationAccel     NOTIFY showSensorCalibrationAccelChanged)
@@ -40,6 +49,7 @@ public:
     Q_PROPERTY(QString                  firmwareUpgradeSingleURL        READ firmwareUpgradeSingleURL       CONSTANT)
     Q_PROPERTY(bool                     guidedBarShowEmergencyStop      READ guidedBarShowEmergencyStop     NOTIFY guidedBarShowEmergencyStopChanged)
     Q_PROPERTY(bool                     guidedBarShowOrbit              READ guidedBarShowOrbit             NOTIFY guidedBarShowOrbitChanged)
+    Q_PROPERTY(bool                     guidedBarShowROI                READ guidedBarShowROI               NOTIFY guidedBarShowROIChanged)
     Q_PROPERTY(bool                     missionWaypointsOnly            READ missionWaypointsOnly           NOTIFY missionWaypointsOnlyChanged)
     Q_PROPERTY(bool                     multiVehicleEnabled             READ multiVehicleEnabled            NOTIFY multiVehicleEnabledChanged)
     Q_PROPERTY(bool                     showOfflineMapExport            READ showOfflineMapExport           NOTIFY showOfflineMapExportChanged)
@@ -53,6 +63,9 @@ public:
     Q_PROPERTY(float                    devicePixelRatio                READ devicePixelRatio               NOTIFY devicePixelRatioChanged)
     Q_PROPERTY(float                    devicePixelDensity              READ devicePixelDensity             NOTIFY devicePixelDensityChanged)
     Q_PROPERTY(bool                     checkFirmwareVersion            READ checkFirmwareVersion           CONSTANT)
+    Q_PROPERTY(bool                     showMavlinkLogOptions           READ showMavlinkLogOptions          CONSTANT)
+    Q_PROPERTY(bool                     enableMultiVehicleList          READ enableMultiVehicleList         CONSTANT)
+    Q_PROPERTY(bool                     enableMapScale                  READ enableMapScale                 CONSTANT)
 
     /// Should QGC hide its settings menu and colapse it into one single menu (Settings and Vehicle Setup)?
     /// @return true if QGC should consolidate both menus into one.
@@ -72,10 +85,21 @@ public:
 
     /// Should the mission status indicator (Plan View) be shown?
     /// @return Yes or no
-    virtual bool        showMissionStatus           () { return true; }
+    virtual bool    showMissionStatus               () { return true; }
 
     /// Allows access to the full fly view window
     virtual QUrl    flyViewOverlay                  () const { return QUrl(); }
+
+    /// Provides an optional preflight checklist
+    virtual QUrl    preFlightChecklistUrl           () const { return QUrl(); }
+
+    /// Allows replacing the toolbar
+    virtual QUrl    mainToolbarUrl                  () const;
+    virtual QUrl    planToolbarUrl                  () const;
+    virtual QColor  toolbarBackgroundLight          () const;
+    virtual QColor  toolbarBackgroundDark           () const;
+    /// Allows replacing the Plan View toolbar container
+    virtual QUrl    planToolbarIndicatorsUrl        () const;
     /// By returning false you can hide the following sensor calibration pages
     virtual bool    showSensorCalibrationCompass    () const { return true; }
     virtual bool    showSensorCalibrationGyro       () const { return true; }
@@ -87,6 +111,7 @@ public:
     virtual bool    showFirmwareUpgrade             () const { return true; }
     virtual bool    guidedBarShowEmergencyStop      () const { return true; }
     virtual bool    guidedBarShowOrbit              () const { return true; }
+    virtual bool    guidedBarShowROI                () const { return true; }
     virtual bool    missionWaypointsOnly            () const { return false; }  ///< true: Only allow waypoints and complex items in Plan
     virtual bool    multiVehicleEnabled             () const { return true; }   ///< false: multi vehicle support is disabled
     virtual bool    guidedActionsRequireRCRSSI      () const { return false; }  ///< true: Guided actions will be disabled is there is no RC RSSI
@@ -96,6 +121,9 @@ public:
     virtual bool    showSimpleMissionStart          () const { return false; }
     virtual bool    disableVehicleConnection        () const { return false; }  ///< true: vehicle connection is disabled
     virtual bool    checkFirmwareVersion            () const { return true; }
+    virtual bool    showMavlinkLogOptions           () const { return true; }
+    virtual bool    enableMultiVehicleList          () const { return true; }
+    virtual bool    enableMapScale                  () const { return true; }
 
 #if defined(__mobile__)
     virtual bool    useMobileFileDialog             () const { return true;}
@@ -121,6 +149,7 @@ signals:
     void showFirmwareUpgradeChanged             (bool show);
     void guidedBarShowEmergencyStopChanged      (bool show);
     void guidedBarShowOrbitChanged              (bool show);
+    void guidedBarShowROIChanged                (bool show);
     void missionWaypointsOnlyChanged            (bool missionWaypointsOnly);
     void multiVehicleEnabledChanged             (bool multiVehicleEnabled);
     void showOfflineMapExportChanged            ();
@@ -149,7 +178,7 @@ public:
         POS_BOTTOM_LEFT
     };
     Q_ENUM(Pos)
-    CustomInstrumentWidget(QObject* parent = NULL);
+    CustomInstrumentWidget(QObject* parent = nullptr);
     Q_PROPERTY(QUrl     source  READ source CONSTANT)
     Q_PROPERTY(Pos      widgetPosition              READ widgetPosition             NOTIFY widgetPositionChanged)
     virtual QUrl        source                      () { return QUrl(); }

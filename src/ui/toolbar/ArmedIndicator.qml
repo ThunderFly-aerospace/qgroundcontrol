@@ -19,21 +19,25 @@ import QGroundControl.Palette               1.0
 
 //-------------------------------------------------------------------------
 //-- Armed Indicator
-QGCLabel {
-    anchors.top:        parent.top
-    anchors.bottom:     parent.bottom
-    verticalAlignment:  Text.AlignVCenter
-    text:               _armed ? qsTr("Armed") : qsTr("Disarmed")
-    font.pointSize:     ScreenTools.mediumFontPointSize
-    color:              qgcPal.buttonText
+QGCComboBox {
+    anchors.verticalCenter: parent.verticalCenter
+    alternateText:          _armed ? qsTr("Armed") : qsTr("Disarmed")
+    model:                  [ qsTr("Arm"), qsTr("Disarm") ]
+    font.pointSize:         ScreenTools.mediumFontPointSize
+    currentIndex:           -1
+    sizeToContents:         true
+
+    property bool showIndicator: true
 
     property var    _activeVehicle: QGroundControl.multiVehicleManager.activeVehicle
     property bool   _armed:         _activeVehicle ? _activeVehicle.armed : false
 
-    QGCPalette { id: qgcPal }
-
-    QGCMouseArea {
-        fillItem: parent
-        onClicked: _armed ? toolBar.disarmVehicle() : toolBar.armVehicle()
+    onActivated: {
+        if (index == 0) {
+            mainWindow.armVehicle()
+        } else {
+            mainWindow.disarmVehicle()
+        }
+        currentIndex = -1
     }
 }

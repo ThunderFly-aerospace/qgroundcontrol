@@ -35,19 +35,17 @@ Map {
     property string mapName:                        'defaultMap'
     property bool   isSatelliteMap:                 activeMapType.name.indexOf("Satellite") > -1 || activeMapType.name.indexOf("Hybrid") > -1
     property var    gcsPosition:                    QGroundControl.qgcPositionManger.gcsPosition
-    property var    gcsHeading:                     QGroundControl.qgcPositionManger.gcsHeading
+    property real   gcsHeading:                     QGroundControl.qgcPositionManger.gcsHeading
     property bool   userPanned:                     false   ///< true: the user has manually panned the map
     property bool   allowGCSLocationCenter:         false   ///< true: map will center/zoom to gcs location one time
     property bool   allowVehicleLocationCenter:     false   ///< true: map will center/zoom to vehicle location one time
     property bool   firstGCSPositionReceived:       false   ///< true: first gcs position update was responded to
     property bool   firstVehiclePositionReceived:   false   ///< true: first vehicle position update was responded to
     property bool   planView:                       false   ///< true: map being using for Plan view, items should be draggable
-    property var    qgcView
 
     readonly property real  maxZoomLevel: 20
 
-    property var    _activeVehicle:                 QGroundControl.multiVehicleManager.activeVehicle
-    property var    activeVehicleCoordinate:        _activeVehicle ? _activeVehicle.coordinate : QtPositioning.coordinate()
+    property var    activeVehicleCoordinate:        activeVehicle ? activeVehicle.coordinate : QtPositioning.coordinate()
 
     function setVisibleRegion(region) {
         // TODO: Is this still necessary with Qt 5.11?
@@ -67,20 +65,16 @@ Map {
     }
 
     function centerToSpecifiedLocation() {
-        qgcView.showDialog(specifyMapPositionDialog, qsTr("Specify Position"), qgcView.showDialogDefaultWidth, StandardButton.Close)
-
+        mainWindow.showComponentDialog(specifyMapPositionDialog, qsTr("Specify Position"), mainWindow.showDialogDefaultWidth, StandardButton.Close)
     }
 
     Component {
         id: specifyMapPositionDialog
-
         EditPositionDialog {
             coordinate:             center
             onCoordinateChanged:    center = coordinate
         }
     }
-
-    ExclusiveGroup { id: mapTypeGroup }
 
     // Center map to gcs location
     onGcsPositionChanged: {
@@ -101,7 +95,8 @@ Map {
 
     function updateActiveMapType() {
         var settings =  QGroundControl.settingsManager.flightMapSettings
-        var fullMapName = settings.mapProvider.enumStringValue + " " + settings.mapType.enumStringValue
+        var fullMapName = settings.mapProvider.value + " " + settings.mapType.value
+
         for (var i = 0; i < _map.supportedMapTypes.length; i++) {
             if (fullMapName === _map.supportedMapTypes[i].name) {
                 _map.activeMapType = _map.supportedMapTypes[i]

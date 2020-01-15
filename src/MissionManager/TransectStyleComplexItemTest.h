@@ -83,7 +83,7 @@ class TransectStyleItem : public TransectStyleComplexItem
     Q_OBJECT
 
 public:
-    TransectStyleItem(Vehicle* vehicle, QObject* parent = NULL);
+    TransectStyleItem(Vehicle* vehicle, QObject* parent = nullptr);
 
     // Overrides from ComplexMissionItem
     QString mapVisualQML        (void) const final { return QString(); }
@@ -94,12 +94,15 @@ public:
     bool    specifiesCoordinate (void) const final { return true; }
     void    appendMissionItems  (QList<MissionItem*>& items, QObject* missionItemParent) final { Q_UNUSED(items); Q_UNUSED(missionItemParent); }
     void    applyNewAltitude    (double newAltitude) final { Q_UNUSED(newAltitude); }
+    double  additionalTimeDelay (void) const final { return 0; }
 
     bool rebuildTransectsPhase1Called;
-    bool rebuildTransectsPhase2Called;
+    bool recalcComplexDistanceCalled;
+    bool recalcCameraShotsCalled;
 
 private slots:
     // Overrides from TransectStyleComplexItem
-    void _rebuildTransectsPhase1(void) final;
-    void _rebuildTransectsPhase2(void) final;
+    void _rebuildTransectsPhase1    (void) final;
+    void _recalcComplexDistance     (void) final;
+    void _recalcCameraShots         (void) final;
 };

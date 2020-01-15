@@ -15,7 +15,6 @@
 #include "Vehicle.h"
 
 class APMAirframeComponent;
-class APMAirframeLoader;
 class APMFlightModesComponent;
 class APMRadioComponent;
 class APMTuningComponent;
@@ -28,6 +27,7 @@ class APMLightsComponent;
 class APMSubFrameComponent;
 class ESP8266Component;
 class APMHeliComponent;
+class APMFollowComponent;
 
 /// This is the APM specific implementation of the AutoPilot class.
 class APMAutoPilotPlugin : public AutoPilotPlugin
@@ -55,9 +55,14 @@ protected:
     APMSafetyComponent*         _safetyComponent;
     APMSensorsComponent*        _sensorsComponent;
     APMTuningComponent*         _tuningComponent;
-    APMAirframeLoader*          _airframeFacts;
     ESP8266Component*           _esp8266Component;
     APMHeliComponent*           _heliComponent;
+    APMFollowComponent*         _followComponent;
+
+#if !defined(NO_SERIAL_LINK) && !defined(__android__)
+private slots:
+    void _checkForBadCubeBlack(void);
+#endif
 
 private:
     QVariantList                _components;

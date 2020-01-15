@@ -14,6 +14,9 @@
 
 DECLARE_SETTINGGROUP(PlanView, "PlanView")
 {
-    QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership); \
     qmlRegisterUncreatableType<PlanViewSettings>("QGroundControl.SettingsManager", 1, 0, "PlanViewSettings", "Reference only"); \
 }
+
+DECLARE_SETTINGSFACT(PlanViewSettings, displayPresetsTabFirst)
+DECLARE_SETTINGSFACT(PlanViewSettings, aboveTerrainWarning)
+DECLARE_SETTINGSFACT(PlanViewSettings, showMissionItemStatus)

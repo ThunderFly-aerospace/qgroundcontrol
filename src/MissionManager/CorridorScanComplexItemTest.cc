@@ -11,7 +11,7 @@
 #include "QGCApplication.h"
 
 CorridorScanComplexItemTest::CorridorScanComplexItemTest(void)
-    : _offlineVehicle(NULL)
+    : _offlineVehicle(nullptr)
 {
     _linePoints << QGeoCoordinate(47.633550640000003, -122.08982199)
                 << QGeoCoordinate(47.634129020000003, -122.08887249)
@@ -139,7 +139,7 @@ void CorridorScanComplexItemTest::_waitForReadyForSave(void)
 {
     int loops = 0;
     while (loops++ < 8) {
-        if (_corridorItem->readyForSave()) {
+        if (_corridorItem->readyForSaveState() == CorridorScanComplexItem::ReadyForSave) {
             return;
         }
         QTest::qWait(500);

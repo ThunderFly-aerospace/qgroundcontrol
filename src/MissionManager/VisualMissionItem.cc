@@ -16,6 +16,7 @@
 #include "QGCApplication.h"
 #include "JsonHelper.h"
 #include "TerrainQuery.h"
+#include "TakeoffMissionItem.h"
 
 const char* VisualMissionItem::jsonTypeKey =                "type";
 const char* VisualMissionItem::jsonTypeSimpleItemValue =    "SimpleItem";
@@ -25,20 +26,6 @@ VisualMissionItem::VisualMissionItem(Vehicle* vehicle, bool flyView, QObject* pa
     : QObject                   (parent)
     , _vehicle                  (vehicle)
     , _flyView                  (flyView)
-    , _isCurrentItem            (false)
-    , _dirty                    (false)
-    , _homePositionSpecialCase  (false)
-    , _terrainAltitude          (qQNaN())
-    , _altDifference            (0.0)
-    , _altPercent               (0.0)
-    , _terrainPercent           (qQNaN())
-    , _terrainCollision         (false)
-    , _azimuth                  (0.0)
-    , _distance                 (0.0)
-    , _missionGimbalYaw         (qQNaN())
-    , _missionVehicleYaw        (qQNaN())
-    , _lastLatTerrainQuery      (0)
-    , _lastLonTerrainQuery      (0)
 {
     _commonInit();
 }
@@ -47,15 +34,6 @@ VisualMissionItem::VisualMissionItem(const VisualMissionItem& other, bool flyVie
     : QObject                   (parent)
     , _vehicle                  (nullptr)
     , _flyView                  (flyView)
-    , _isCurrentItem            (false)
-    , _dirty                    (false)
-    , _homePositionSpecialCase  (false)
-    , _altDifference            (0.0)
-    , _altPercent               (0.0)
-    , _terrainPercent           (qQNaN())
-    , _terrainCollision         (false)
-    , _azimuth                  (0.0)
-    , _distance                 (0.0)
 {
     *this = other;
 
@@ -100,6 +78,14 @@ void VisualMissionItem::setIsCurrentItem(bool isCurrentItem)
     if (_isCurrentItem != isCurrentItem) {
         _isCurrentItem = isCurrentItem;
         emit isCurrentItemChanged(isCurrentItem);
+    }
+}
+
+void VisualMissionItem::setHasCurrentChildItem(bool hasCurrentChildItem)
+{
+    if (_hasCurrentChildItem != hasCurrentChildItem) {
+        _hasCurrentChildItem = hasCurrentChildItem;
+        emit hasCurrentChildItemChanged(hasCurrentChildItem);
     }
 }
 
@@ -177,16 +163,22 @@ void VisualMissionItem::_updateTerrainAltitude(void)
         // This is an intermediate state we don't react to
         return;
     }
-    if (!_flyView && coordinate().isValid()) {
-        // We use a timer so that any additional requests before the timer fires result in only a single request
-        _updateTerrainTimer.start();
+    if (!_flyView && specifiesCoordinate() && coordinate().isValid()) {
+        if (specifiesCoordinate()) {
+            if (coordinate().isValid()) {
+                // We use a timer so that any additional requests before the timer fires result in only a single request
+                _updateTerrainTimer.start();
+            }
+        } else {
+            _terrainAltitude = qQNaN();
+        }
     }
 }
 
 void VisualMissionItem::_reallyUpdateTerrainAltitude(void)
 {
     QGeoCoordinate coord = coordinate();
-    if (coord.isValid() && (qIsNaN(_terrainAltitude) || !qFuzzyCompare(_lastLatTerrainQuery, coord.latitude()) || qFuzzyCompare(_lastLonTerrainQuery, coord.longitude()))) {
+    if (specifiesCoordinate() && coord.isValid() && (qIsNaN(_terrainAltitude) || !qFuzzyCompare(_lastLatTerrainQuery, coord.latitude()) || qFuzzyCompare(_lastLonTerrainQuery, coord.longitude()))) {
         _lastLatTerrainQuery = coord.latitude();
         _lastLonTerrainQuery = coord.longitude();
         TerrainAtCoordinateQuery* terrain = new TerrainAtCoordinateQuery(this);
@@ -212,3 +204,18 @@ void VisualMissionItem::_setBoundingCube(QGCGeoBoundingCube bc)
     }
 }
 
+void VisualMissionItem::setWizardMode(bool wizardMode)
+{
+    if (wizardMode != _wizardMode) {
+        _wizardMode = wizardMode;
+        emit wizardModeChanged(_wizardMode);
+    }
+}
+
+void VisualMissionItem::setParentItem(VisualMissionItem* parentItem)
+{
+    if (_parentItem != parentItem) {
+        _parentItem = parentItem;
+        emit parentItemChanged(parentItem);
+    }
+}

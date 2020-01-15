@@ -19,6 +19,7 @@
 #include "AutoPilotPlugin.h"
 #include "GeoFenceManager.h"
 #include "RallyPointManager.h"
+#include "FollowMe.h"
 
 #include <QList>
 #include <QString>
@@ -47,6 +48,7 @@ public:
         GuidedModeCapability =              1 << 2, ///< Vehicle supports guided mode commands
         OrbitModeCapability =               1 << 3, ///< Vehicle supports orbit mode
         TakeoffVehicleCapability =          1 << 4, ///< Vehicle supports guided takeoff
+        ROIModeCapability =                 1 << 5, ///< Vehicle supports ROI
     } FirmwareCapabilities;
 
     /// Maps from on parameter name to another
@@ -79,12 +81,13 @@ public:
     ///         free when no longer needed.
     virtual QList<VehicleComponent*> componentsForVehicle(AutoPilotPlugin* vehicle);
 
-    /// Returns the list of available flight modes. Flight modes can be different in normal/advanced ui mode.
+    /// Returns the list of available flight modes for the Fly View dropdown. This may or may not be the full
+    /// list available from the firmware. Call will be made again if advanced mode changes.
+    virtual QStringList flightModes(Vehicle* /*vehicle*/) { return QStringList(); }
+
+    /// Returns the list of additional flight modes to add to the list for joystick button actions.
     /// Call will be made again if advanced mode changes.
-    virtual QStringList flightModes(Vehicle* vehicle) {
-        Q_UNUSED(vehicle);
-        return QStringList();
-    }
+    virtual QStringList extraJoystickFlightModes(Vehicle* /*vehicle*/) { return QStringList(); }
 
     /// Returns the name for this flight mode. Flight mode names must be human readable as well as audio speakable.
     ///     @param base_mode Base mode from mavlink HEARTBEAT message
@@ -105,6 +108,11 @@ public:
     /// Returns the flight mode for RTL
     virtual QString rtlFlightMode(void) const { return QString(); }
 
+    /// Returns the flight mode for Smart RTL
+    virtual QString smartRTLFlightMode(void) const { return QString(); }
+
+    virtual bool supportsSmartRTL(void) const { return false; }
+
     /// Returns the flight mode for Land
     virtual QString landFlightMode(void) const { return QString(); }
 
@@ -117,6 +125,9 @@ public:
     /// Returns the flight mode which the vehicle will be in if it is performing a goto location
     virtual QString gotoFlightMode(void) const;
 
+    /// Returns the flight mode which the vehicle will be for follow me
+    virtual QString followFlightMode(void) const { return QString(); };
+
     /// Set guided flight mode
     virtual void setGuidedMode(Vehicle* vehicle, bool guidedMode);
 
@@ -125,7 +136,7 @@ public:
     virtual void pauseVehicle(Vehicle* vehicle);
 
     /// Command vehicle to return to launch
-    virtual void guidedModeRTL(Vehicle* vehicle);
+    virtual void guidedModeRTL(Vehicle* vehicle, bool smartRTL);
 
     /// Command vehicle to land at current location
     virtual void guidedModeLand(Vehicle* vehicle);
@@ -157,7 +168,7 @@ public:
 
     /// Returns true if the vehicle and firmware supports the use of negative thrust
     /// Typically supported rover.
-    virtual bool supportsNegativeThrust(void);
+    virtual bool supportsNegativeThrust(Vehicle *);
 
     /// Returns true if the firmware supports the use of the RC radio and requires the RC radio
     /// setup page. Returns true by default.
@@ -202,6 +213,7 @@ public:
     virtual QString getVersionParam(void) { return QString(); }
 
     /// Returns the parameter set version info pulled from inside the meta data file. -1 if not found.
+    /// Note: The implementation for this must not vary by vehicle type.
     virtual void getParameterMetaDataVersionInfo(const QString& metaDataFile, int& majorVersion, int& minorVersion);
 
     /// Returns the internal resource parameter meta date file.
@@ -210,12 +222,12 @@ public:
     /// Loads the specified parameter meta data file.
     /// @return Opaque parameter meta data information which must be stored with Vehicle. Vehicle is responsible to
     ///         call deleteParameterMetaData when no longer needed.
-    virtual QObject* loadParameterMetaData(const QString& metaDataFile) { Q_UNUSED(metaDataFile); return NULL; }
+    virtual QObject* loadParameterMetaData(const QString& metaDataFile) { Q_UNUSED(metaDataFile); return nullptr; }
 
     /// Returns the FactMetaData associated with the parameter name
     ///     @param opaqueParameterMetaData Opaque pointer returned from loadParameterMetaData
     ///     @param name Parameter name
-    virtual FactMetaData* getMetaDataForFact(QObject* parameterMetaData, const QString& name, MAV_TYPE vehicleType) { Q_UNUSED(parameterMetaData); Q_UNUSED(name); Q_UNUSED(vehicleType); return NULL; }
+    virtual FactMetaData* getMetaDataForFact(QObject* parameterMetaData, const QString& name, MAV_TYPE vehicleType) { Q_UNUSED(parameterMetaData); Q_UNUSED(name); Q_UNUSED(vehicleType); return nullptr; }
 
     /// Adds the parameter meta data to the Fact
     ///     @param opaqueParameterMetaData Opaque pointer returned from loadParameterMetaData
@@ -267,11 +279,11 @@ public:
     /// TODO: This should go into QGCCameraManager
     virtual const QVariantList& cameraList(const Vehicle* vehicle);
 
-    /// Creates vehicle camera manager. Returns NULL if not supported.
+    /// Creates vehicle camera manager.
     virtual QGCCameraManager* createCameraManager(Vehicle *vehicle);
 
-    /// Camera control. Returns NULL if not supported.
-    virtual QGCCameraControl* createCameraControl(const mavlink_camera_information_t* info, Vehicle* vehicle, int compID, QObject* parent = NULL);
+    /// Camera control.
+    virtual QGCCameraControl* createCameraControl(const mavlink_camera_information_t* info, Vehicle* vehicle, int compID, QObject* parent = nullptr);
 
     /// Returns a pointer to a dictionary of firmware-specific FactGroups
     virtual QMap<QString, FactGroup*>* factGroups(void);
@@ -308,6 +320,14 @@ public:
     /// returns 1 if current > compare, 0 if current == compare, -1 if current < compare
     int versionCompare(Vehicle* vehicle, QString& compare);
     int versionCompare(Vehicle* vehicle, int major, int minor, int patch);
+
+    /// Allows the Firmware plugin to override the facts meta data.
+    ///     @param vehicleType - Type of current vehicle
+    ///     @param metaData - MetaData for fact
+    virtual void adjustMetaData(MAV_TYPE vehicleType, FactMetaData* metaData) {Q_UNUSED(vehicleType); Q_UNUSED(metaData);}
+
+    /// Sends the appropriate mavlink message for follow me support
+    virtual void sendGCSMotionReport(Vehicle* vehicle, FollowMe::GCSMotionReport& motionReport, uint8_t estimatationCapabilities);
 
     // FIXME: Hack workaround for non pluginize FollowMe support
     static const QString px4FollowMeFlightMode;

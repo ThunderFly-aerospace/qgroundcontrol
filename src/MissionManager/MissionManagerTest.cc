@@ -35,7 +35,7 @@ void MissionManagerTest::_writeItems(MockLinkMissionItemHandler::FailureMode_t f
     QList<MissionItem*> missionItems;
     
     // Editor has a home position item on the front, so we do the same
-    MissionItem* homeItem = new MissionItem(NULL /* Vehicle */, this);
+    MissionItem* homeItem = new MissionItem(nullptr /* Vehicle */, this);
     homeItem->setCommand(MAV_CMD_NAV_WAYPOINT);
     homeItem->setParam5(47.3769);
     homeItem->setParam6(8.549444);
@@ -168,7 +168,7 @@ void MissionManagerTest::_roundTripItems(MockLinkMissionItemHandler::FailureMode
 
     // Validate returned items
     
-    size_t cMissionItemsExpected;
+    int cMissionItemsExpected;
     
     if (shouldFail) {
         cMissionItemsExpected = 0;
@@ -182,14 +182,14 @@ void MissionManagerTest::_roundTripItems(MockLinkMissionItemHandler::FailureMode
     
     QCOMPARE(_missionManager->missionItems().count(), (int)cMissionItemsExpected);
 
-    size_t firstActualItem = 0;
+    int firstActualItem = 0;
     if (_mockLink->getFirmwareType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
         // First item is home position, don't validate it
         firstActualItem++;
     }
 
     int testCaseIndex = 0;
-    for (size_t actualItemIndex=firstActualItem; actualItemIndex<cMissionItemsExpected; actualItemIndex++) {
+    for (int actualItemIndex=firstActualItem; actualItemIndex<cMissionItemsExpected; actualItemIndex++) {
         const TestCase_t* testCase = &_rgTestCases[testCaseIndex];
 
         int expectedSequenceNumber = testCase->expectedItem.sequenceNumber;

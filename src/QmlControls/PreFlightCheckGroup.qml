@@ -27,10 +27,11 @@ Column  {
     Component.onCompleted: {
         enabled = _checked
         var moveList = []
-        for (var i=2; i<children.length; i++) {
+        var i = 0
+        for (i = 2; i < children.length; i++) {
             moveList.push(children[i])
         }
-        for (var i=0; i<moveList.length; i++) {
+        for (i = 0; i < moveList.length; i++) {
             moveList[i].parent = innerColumn
         }
     }
@@ -42,8 +43,10 @@ Column  {
     }
 
     SectionHeader {
-        id:     header
-        text:   name + (passed ? qsTr(" (passed)") : "")
+        id:             header
+        anchors.left:   parent.left
+        anchors.right:  parent.right
+        text:           name + (passed ? qsTr(" (passed)") : "")
     }
 
     Column {

@@ -48,12 +48,12 @@ MacBuild {
 
 MacBuild {
     # Copy non-standard frameworks into app package
-    QMAKE_POST_LINK += && rsync -a --delete $$BASEDIR/libs/lib/Frameworks $$DESTDIR/$${TARGET}.app/Contents/
+    QMAKE_POST_LINK += && rsync -a --delete $$BASEDIR/libs/Frameworks $$DESTDIR/$${TARGET}.app/Contents/
     # SDL2 Framework
     QMAKE_POST_LINK += && install_name_tool -change "@rpath/SDL2.framework/Versions/A/SDL2" "@executable_path/../Frameworks/SDL2.framework/Versions/A/SDL2" $$DESTDIR/$${TARGET}.app/Contents/MacOS/$${TARGET}
     # AirMap
     contains (DEFINES, QGC_AIRMAP_ENABLED) {
-        QMAKE_POST_LINK += && rsync -a $$BASEDIR/libs/airmapd/macOS/Qt.5.11.0/* $$DESTDIR/$${TARGET}.app/Contents/Frameworks/
+        QMAKE_POST_LINK += && rsync -a $$BASEDIR/libs/airmapd/macOS/$$AIRMAP_QT_PATH/* $$DESTDIR/$${TARGET}.app/Contents/Frameworks/
         QMAKE_POST_LINK += && install_name_tool -change "@rpath/libairmap-qt.0.0.1.dylib" "@executable_path/../Frameworks/libairmap-qt.0.0.1.dylib" $$DESTDIR/$${TARGET}.app/Contents/MacOS/$${TARGET}
     }
 }
@@ -67,9 +67,9 @@ WindowsBuild {
     DebugBuild: DLL_QT_DEBUGCHAR = "d"
     ReleaseBuild: DLL_QT_DEBUGCHAR = ""
     COPY_FILE_LIST = \
-        $$BASEDIR\\libs\\lib\\sdl2\\msvc\\lib\\x86\\SDL2.dll \
-        $$BASEDIR\\deploy\\libeay32.dll \
-        $$BASEDIR_WIN\\deploy\\ssleay32.dll
+        $$BASEDIR\\libs\\sdl2\\msvc\\lib\\x64\\SDL2.dll \
+        $$BASEDIR\\deploy\\libcrypto-1_1-x64.dll \
+        $$BASEDIR_WIN\\deploy\\libssl-1_1-x64.dll
 
     for(COPY_FILE, COPY_FILE_LIST) {
         QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"$$COPY_FILE\" \"$$DESTDIR_WIN\"
@@ -78,29 +78,14 @@ WindowsBuild {
     ReleaseBuild {
         # Copy Visual Studio DLLs
         # Note that this is only done for release because the debugging versions of these DLLs cannot be redistributed.
-        win32-msvc2010 {
-            QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"C:\\Windows\\System32\\msvcp100.dll\"  \"$$DESTDIR_WIN\"
-            QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"C:\\Windows\\System32\\msvcr100.dll\"  \"$$DESTDIR_WIN\"
-
-        } else:win32-msvc2012 {
-            QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"C:\\Windows\\System32\\msvcp110.dll\"  \"$$DESTDIR_WIN\"
-            QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"C:\\Windows\\System32\\msvcr110.dll\"  \"$$DESTDIR_WIN\"
-
-        } else:win32-msvc2013 {
-            QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"C:\\Windows\\System32\\msvcp120.dll\"  \"$$DESTDIR_WIN\"
-            QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"C:\\Windows\\System32\\msvcr120.dll\"  \"$$DESTDIR_WIN\"
-
-        } else:win32-msvc2015 {
-            QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"C:\\Windows\\System32\\msvcp140.dll\"  \"$$DESTDIR_WIN\"
-            QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"C:\\Windows\\System32\\vcruntime140.dll\"  \"$$DESTDIR_WIN\"
-
-        } else {
-            error("Visual studio version not supported, installation cannot be completed.")
-        }
+        QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"$$BASEDIR\\deploy\\msvcp140.dll\"  \"$$DESTDIR_WIN\"
+        QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"$$BASEDIR\\deploy\\msvcp140_1.dll\"  \"$$DESTDIR_WIN\"
+        QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"$$BASEDIR\\deploy\\msvcp140_2.dll\"  \"$$DESTDIR_WIN\"
+        QMAKE_POST_LINK += $$escape_expand(\\n) $$QMAKE_COPY \"$$BASEDIR\\deploy\\vcruntime140.dll\"  \"$$DESTDIR_WIN\"
     }
 
     DEPLOY_TARGET = $$shell_quote($$shell_path($$DESTDIR_WIN\\$${TARGET}.exe))
-    QMAKE_POST_LINK += $$escape_expand(\\n) $$QT_BIN_DIR\\windeployqt --no-compiler-runtime --qmldir=$${BASEDIR_WIN}\\src $${DEPLOY_TARGET}
+    QMAKE_POST_LINK += $$escape_expand(\\n) $$QT_BIN_DIR\\windeployqt --qmldir=$${BASEDIR_WIN}\\src $${DEPLOY_TARGET}
 }
 
 LinuxBuild {
@@ -132,9 +117,11 @@ LinuxBuild {
         libQt5Widgets.so.5 \
         libQt5XcbQpa.so.5 \
         libQt5Xml.so.5 \
+        libicui18n.so* \
         libQt5TextToSpeech.so.5
 
     !contains(DEFINES, __rasp_pi2__) {
+        # Some Qt distributions link with *.so.56
         QT_LIB_LIST += \
             libicudata.so.56 \
             libicui18n.so.56 \

@@ -108,7 +108,21 @@ void SurveyComplexItem::save(QJsonArray&  planItems)
 {
     QJsonObject saveObject;
 
-    _save(saveObject);
+    _saveWorker(saveObject);
+    planItems.append(saveObject);
+}
+
+void SurveyComplexItem::savePreset(const QString& name)
+{
+    QJsonObject saveObject;
+
+    _saveWorker(saveObject);
+    _savePresetJson(name, saveObject);
+}
+
+void SurveyComplexItem::_saveWorker(QJsonObject& saveObject)
+{
+    TransectStyleComplexItem::_save(saveObject);
 
     saveObject[JsonHelper::jsonVersionKey] =                    5;
     saveObject[VisualMissionItem::jsonTypeKey] =                VisualMissionItem::jsonTypeComplexItemValue;
@@ -120,8 +134,15 @@ void SurveyComplexItem::save(QJsonArray&  planItems)
 
     // Polygon shape
     _surveyAreaPolygon.saveToJson(saveObject);
+}
 
-    planItems.append(saveObject);
+void SurveyComplexItem::loadPreset(const QString& name)
+{
+    QString errorString;
+
+    QJsonObject presetObject = _loadPresetJson(name);
+    _loadV4V5(presetObject, 0, errorString, 5, true /* forPresets */);
+    _rebuildTransects();
 }
 
 bool SurveyComplexItem::load(const QJsonObject& complexObject, int sequenceNumber, QString& errorString)
@@ -141,8 +162,14 @@ bool SurveyComplexItem::load(const QJsonObject& complexObject, int sequenceNumbe
     }
 
     if (version == 4 || version == 5) {
-        if (!_loadV4V5(complexObject, sequenceNumber, errorString, version)) {
+        if (!_loadV4V5(complexObject, sequenceNumber, errorString, version, false /* forPresets */)) {
             return false;
+        }
+
+        _recalcComplexDistance();
+        if (_cameraShots == 0) {
+            // Shot count was possibly not available from plan file
+            _recalcCameraShots();
         }
     } else {
         // Must be v2 or v3
@@ -157,14 +184,15 @@ bool SurveyComplexItem::load(const QJsonObject& complexObject, int sequenceNumbe
         if (!_loadV3(complexObject, sequenceNumber, errorString)) {
             return false;
         }
-    }
 
-    _rebuildTransects();
+        // V2/3 doesn't include individual items so we need to rebuild manually
+        _rebuildTransects();
+    }
 
     return true;
 }
 
-bool SurveyComplexItem::_loadV4V5(const QJsonObject& complexObject, int sequenceNumber, QString& errorString, int version)
+bool SurveyComplexItem::_loadV4V5(const QJsonObject& complexObject, int sequenceNumber, QString& errorString, int version, bool forPresets)
 {
     QList<JsonHelper::KeyValidateInfo> keyInfoList = {
         { VisualMissionItem::jsonTypeKey,               QJsonValue::String, true },
@@ -190,16 +218,18 @@ bool SurveyComplexItem::_loadV4V5(const QJsonObject& complexObject, int sequence
         return false;
     }
 
-    _ignoreRecalc = true;
+    _ignoreRecalc = !forPresets;
 
-    setSequenceNumber(sequenceNumber);
+    if (!forPresets) {
+        setSequenceNumber(sequenceNumber);
 
-    if (!_surveyAreaPolygon.loadFromJson(complexObject, true /* required */, errorString)) {
-        _surveyAreaPolygon.clear();
-        return false;
+        if (!_surveyAreaPolygon.loadFromJson(complexObject, true /* required */, errorString)) {
+            _surveyAreaPolygon.clear();
+            return false;
+        }
     }
 
-    if (!_load(complexObject, errorString)) {
+    if (!TransectStyleComplexItem::_load(complexObject, forPresets, errorString)) {
         _ignoreRecalc = false;
         return false;
     }
@@ -207,7 +237,7 @@ bool SurveyComplexItem::_loadV4V5(const QJsonObject& complexObject, int sequence
     _gridAngleFact.setRawValue              (complexObject[_jsonGridAngleKey].toDouble());
     _flyAlternateTransectsFact.setRawValue  (complexObject[_jsonFlyAlternateTransectsKey].toBool(false));
 
-    if(version == 5) {
+    if (version == 5) {
         _splitConcavePolygonsFact.setRawValue   (complexObject[_jsonSplitConcavePolygonsKey].toBool(true));
     }
 
@@ -275,7 +305,7 @@ bool SurveyComplexItem::_loadV3(const QJsonObject& complexObject, int sequenceNu
     _turnAroundDistanceFact.setRawValue (gridObject[_jsonV3TurnaroundDistKey].toDouble());
 
     if (gridObject.contains(_jsonEntryPointKey)) {
-        _entryPoint = gridObject[_jsonEntryPointKey].toDouble();
+        _entryPoint = gridObject[_jsonEntryPointKey].toInt();
     } else {
         _entryPoint = EntryLocationTopRight;
     }
@@ -804,6 +834,12 @@ void SurveyComplexItem::_rebuildTransectsPhase1WorkerSinglePolygon(bool refly)
 
     double gridAngle = _gridAngleFact.rawValue().toDouble();
     double gridSpacing = _cameraCalc.adjustedFootprintSide()->rawValue().toDouble();
+    if (gridSpacing < 0.5) {
+        // We can't let gridSpacing get too small otherwise we will end up with too many transects.
+        // So we limit to 0.5 meter spacing as min and set to huge value which will cause a single
+        // transect to be added.
+        gridSpacing = 100000;
+    }
 
     gridAngle = _clampGridAngle90(gridAngle);
     gridAngle += refly ? 90 : 0;
@@ -1384,42 +1420,78 @@ void SurveyComplexItem::_rebuildTransectsFromPolygon(bool refly, const QPolygonF
     qCDebug(SurveyComplexItemLog) << "_transects.size() " << _transects.size();
 }
 
-void SurveyComplexItem::_rebuildTransectsPhase2(void)
+void SurveyComplexItem::_recalcComplexDistance(void)
 {
-    // Calculate distance flown for complex item
     _complexDistance = 0;
     for (int i=0; i<_visualTransectPoints.count() - 1; i++) {
         _complexDistance += _visualTransectPoints[i].value<QGeoCoordinate>().distanceTo(_visualTransectPoints[i+1].value<QGeoCoordinate>());
     }
+    emit complexDistanceChanged();
+}
 
-    if (triggerDistance() == 0) {
+void SurveyComplexItem::_recalcCameraShots(void)
+{
+    double triggerDistance = this->triggerDistance();
+
+    if (triggerDistance == 0) {
         _cameraShots = 0;
     } else {
         if (_cameraTriggerInTurnAroundFact.rawValue().toBool()) {
-            _cameraShots = qCeil(_complexDistance / triggerDistance());
+            _cameraShots = qCeil(_complexDistance / triggerDistance);
         } else {
             _cameraShots = 0;
-            for (const QList<TransectStyleComplexItem::CoordInfo_t>& transect: _transects) {
-                QGeoCoordinate firstCameraCoord, lastCameraCoord;
-                if (_hasTurnaround()) {
-                    firstCameraCoord = transect[1].coord;
-                    lastCameraCoord = transect[transect.count() - 2].coord;
+
+            if (_loadedMissionItemsParent) {
+                // We have to do it the hard way based on the mission items themselves
+                if (hoverAndCaptureEnabled()) {
+                    // Count the number of camera triggers in the mission items
+                    for (const MissionItem* missionItem: _loadedMissionItems) {
+                        _cameraShots += missionItem->command() == MAV_CMD_IMAGE_START_CAPTURE ? 1 : 0;
+                    }
                 } else {
-                    firstCameraCoord = transect.first().coord;
-                    lastCameraCoord = transect.last().coord;
+                    bool waitingForTriggerStop = false;
+                    QGeoCoordinate distanceStartCoord;
+                    QGeoCoordinate distanceEndCoord;
+                    for (const MissionItem* missionItem: _loadedMissionItems) {
+                        if (missionItem->command() == MAV_CMD_NAV_WAYPOINT) {
+                            if (waitingForTriggerStop) {
+                                distanceEndCoord = QGeoCoordinate(missionItem->param5(), missionItem->param6());
+                            } else {
+                                distanceStartCoord = QGeoCoordinate(missionItem->param5(), missionItem->param6());
+                            }
+                        } else if (missionItem->command() == MAV_CMD_DO_SET_CAM_TRIGG_DIST) {
+                            if (missionItem->param1() > 0) {
+                                // Trigger start
+                                waitingForTriggerStop = true;
+                            } else {
+                                // Trigger stop
+                                waitingForTriggerStop = false;
+                                _cameraShots += qCeil(distanceEndCoord.distanceTo(distanceStartCoord) / triggerDistance);
+                                distanceStartCoord = QGeoCoordinate();
+                                distanceEndCoord = QGeoCoordinate();
+                            }
+                        }
+                    }
+
                 }
-                _cameraShots += qCeil(firstCameraCoord.distanceTo(lastCameraCoord) / triggerDistance());
+            } else {
+                // We have transects available, calc from those
+                for (const QList<TransectStyleComplexItem::CoordInfo_t>& transect: _transects) {
+                    QGeoCoordinate firstCameraCoord, lastCameraCoord;
+                    if (_hasTurnaround() && !hoverAndCaptureEnabled()) {
+                        firstCameraCoord = transect[1].coord;
+                        lastCameraCoord = transect[transect.count() - 2].coord;
+                    } else {
+                        firstCameraCoord = transect.first().coord;
+                        lastCameraCoord = transect.last().coord;
+                    }
+                    _cameraShots += qCeil(firstCameraCoord.distanceTo(lastCameraCoord) / triggerDistance);
+                }
             }
         }
     }
 
-    _coordinate = _visualTransectPoints.count() ? _visualTransectPoints.first().value<QGeoCoordinate>() : QGeoCoordinate();
-    _exitCoordinate = _visualTransectPoints.count() ? _visualTransectPoints.last().value<QGeoCoordinate>() : QGeoCoordinate();
-
     emit cameraShotsChanged();
-    emit complexDistanceChanged();
-    emit coordinateChanged(_coordinate);
-    emit exitCoordinateChanged(_exitCoordinate);
 }
 
 // FIXME: This same exact code is in Corridor Scan. Move to TransectStyleComplex?
@@ -1430,9 +1502,9 @@ void SurveyComplexItem::applyNewAltitude(double newAltitude)
     _cameraCalc.setDistanceToSurfaceRelative(true);
 }
 
-bool SurveyComplexItem::readyForSave(void) const
+SurveyComplexItem::ReadyForSaveState SurveyComplexItem::readyForSaveState(void) const
 {
-    return TransectStyleComplexItem::readyForSave();
+    return TransectStyleComplexItem::readyForSaveState();
 }
 
 void SurveyComplexItem::appendMissionItems(QList<MissionItem*>& items, QObject* missionItemParent)
@@ -1475,4 +1547,17 @@ void SurveyComplexItem::rotateEntryPoint(void)
 double SurveyComplexItem::timeBetweenShots(void)
 {
     return _cruiseSpeed == 0 ? 0 : triggerDistance() / _cruiseSpeed;
+}
+
+double SurveyComplexItem::additionalTimeDelay (void) const
+{
+    double hoverTime = 0;
+
+    if (hoverAndCaptureEnabled()) {
+        for (const QList<TransectStyleComplexItem::CoordInfo_t>& transect: _transects) {
+            hoverTime += _hoverAndCaptureDelaySeconds * transect.count();
+        }
+    }
+
+    return hoverTime;
 }

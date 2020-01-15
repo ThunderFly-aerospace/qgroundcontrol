@@ -35,7 +35,7 @@ public:
     //-- Return a list of cameras provided by this vehicle
     virtual QmlObjectListModel* cameras             () { return &_cameras; }
     //-- Camera names to show the user (for selection)
-    virtual QStringList          cameraLabels       () { return _cameraLabels; }
+    virtual QStringList         cameraLabels        () { return _cameraLabels; }
     //-- Current selected camera
     virtual int                 currentCamera       () { return _currentCamera; }
     virtual QGCCameraControl*   currentCameraInstance();
@@ -43,6 +43,8 @@ public:
     virtual void                setCurrentCamera    (int sel);
     //-- Current stream
     virtual QGCVideoStreamInfo* currentStreamInstance();
+    //-- Current thermal stream
+    virtual QGCVideoStreamInfo* thermalStreamInstance();
 
 signals:
     void    camerasChanged          ();
@@ -55,9 +57,15 @@ protected slots:
     virtual void    _mavlinkMessageReceived (const mavlink_message_t& message);
     virtual void    _activeJoystickChanged  (Joystick* joystick);
     virtual void    _stepZoom               (int direction);
+    virtual void    _startZoom              (int direction);
+    virtual void    _stopZoom               ();
     virtual void    _stepCamera             (int direction);
     virtual void    _stepStream             (int direction);
     virtual void    _cameraTimeout          ();
+    virtual void    _triggerCamera          ();
+    virtual void    _startVideoRecording    ();
+    virtual void    _stopVideoRecording     ();
+    virtual void    _toggleVideoRecording   ();
 
 protected:
     virtual QGCCameraControl* _findCamera   (int id);
@@ -71,16 +79,18 @@ protected:
     virtual void    _handleCaptureStatus    (const mavlink_message_t& message);
     virtual void    _handleVideoStreamInfo  (const mavlink_message_t& message);
     virtual void    _handleVideoStreamStatus(const mavlink_message_t& message);
+    virtual void    _handleBatteryStatus    (const mavlink_message_t& message);
 
 protected:
 
     class CameraStruct : public QObject {
     public:
-        CameraStruct(QObject* parent);
+        CameraStruct(QObject* parent, uint8_t compID_);
         QTime   lastHeartbeat;
         bool    infoReceived = false;
         bool    gaveUp       = false;
         int     tryCount     = 0;
+        uint8_t compID       = 0;
     };
 
     Vehicle*            _vehicle            = nullptr;
@@ -93,5 +103,5 @@ protected:
     QTime               _lastZoomChange;
     QTime               _lastCameraChange;
     QTimer              _cameraTimer;
-    QMap<int, CameraStruct*> _cameraInfoRequest;
+    QMap<QString, CameraStruct*> _cameraInfoRequest;
 };

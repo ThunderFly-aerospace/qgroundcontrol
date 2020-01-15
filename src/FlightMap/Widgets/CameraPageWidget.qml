@@ -30,50 +30,60 @@ Column {
 
     property bool   showSettingsIcon:       _camera !== null
 
-    property var    _activeVehicle:         QGroundControl.multiVehicleManager.activeVehicle
-    property var    _dynamicCameras:        _activeVehicle ? _activeVehicle.dynamicCameras : null
+    property var    _dynamicCameras:        activeVehicle ? activeVehicle.dynamicCameras : null
     property bool   _isCamera:              _dynamicCameras ? _dynamicCameras.cameras.count > 0 : false
-    property var    _camera:                _isCamera ? _dynamicCameras.cameras.get(_curCameraIndex) : null
-    property bool   _cameraModeUndefined:   _isCamera ? _dynamicCameras.cameras.get(_curCameraIndex).cameraMode === QGCCameraControl.CAMERA_MODE_UNDEFINED : true
-    property bool   _cameraVideoMode:       _isCamera ? _dynamicCameras.cameras.get(_curCameraIndex).cameraMode === 1 : false
-    property bool   _cameraPhotoMode:       _isCamera ? _dynamicCameras.cameras.get(_curCameraIndex).cameraMode === 0 : false
-    property bool   _cameraPhotoIdle:       _isCamera && _camera.photoStatus === QGCCameraControl.PHOTO_CAPTURE_IDLE
-    property bool   _cameraElapsedMode:     _isCamera && _camera.cameraMode === QGCCameraControl.CAM_MODE_PHOTO && _camera.photoMode === QGCCameraControl.PHOTO_CAPTURE_TIMELAPSE
+    property int    _curCameraIndex:        _dynamicCameras ? _dynamicCameras.currentCamera : 0
+    property var    _camera:                _isCamera ? (_dynamicCameras.cameras.get(_curCameraIndex) && _dynamicCameras.cameras.get(_curCameraIndex).paramComplete ? _dynamicCameras.cameras.get(_curCameraIndex) : null) : null
+    property bool   _cameraModeUndefined:   _camera ? _camera.cameraMode === QGCCameraControl.CAM_MODE_UNDEFINED : true
+    property bool   _cameraVideoMode:       _camera ? _camera.cameraMode === QGCCameraControl.CAM_MODE_VIDEO : false
+    property bool   _cameraPhotoMode:       _camera ? _camera.cameraMode === QGCCameraControl.CAM_MODE_PHOTO : false
+    property bool   _cameraElapsedMode:     _camera && _camera.cameraMode === QGCCameraControl.CAM_MODE_PHOTO && _camera.photoMode === QGCCameraControl.PHOTO_CAPTURE_TIMELAPSE
     property real   _spacers:               ScreenTools.defaultFontPixelHeight * 0.5
     property real   _labelFieldWidth:       ScreenTools.defaultFontPixelWidth * 30
     property real   _editFieldWidth:        ScreenTools.defaultFontPixelWidth * 30
-    property bool   _communicationLost:     _activeVehicle ? _activeVehicle.connectionLost : false
-    property bool   _hasModes:              _isCamera && _camera && _camera.hasModes
+    property bool   _communicationLost:     activeVehicle ? activeVehicle.connectionLost : false
+    property bool   _streamingEnabled:      false //TODO: determine what it should be, VideoPageWidget.qml does QGroundControl.settingsManager.videoSettings.streamConfigured
+    property bool   _hasModes:              _camera && _camera.hasModes
     property bool   _videoRecording:        _camera && _camera.videoStatus === QGCCameraControl.VIDEO_CAPTURE_STATUS_RUNNING
-    property bool   _noStorage:             _camera && _camera.storageTotal === 0
-    property int    _curCameraIndex:        _dynamicCameras ? _dynamicCameras.currentCamera : 0
+    property bool   _photoIdle:             _camera && (_camera.photoStatus === QGCCameraControl.PHOTO_CAPTURE_IDLE || _camera.photoStatus >= QGCCameraControl.PHOTO_CAPTURE_LAST)
+    property bool   _storageReady:          _camera && _camera.storageStatus === QGCCameraControl.STORAGE_READY
+    property bool   _batteryReady:          _camera && _camera.batteryRemaining >= 0
+    property bool   _storageIgnored:        _camera && _camera.storageStatus === QGCCameraControl.STORAGE_NOT_SUPPORTED
+    property bool   _canShoot:              !_cameraModeUndefined && ((_storageReady && _camera.storageFree > 0) || _storageIgnored)
+    property bool   _isShooting:            (_cameraVideoMode && _videoRecording) || (_cameraPhotoMode && !_photoIdle)
 
     function showSettings() {
-        qgcView.showDialog(cameraSettings, _cameraVideoMode ? qsTr("Video Settings") : qsTr("Camera Settings"), 70, StandardButton.Ok)
+        mainWindow.showComponentDialog(cameraSettings, _cameraVideoMode ? qsTr("Video Settings") : qsTr("Camera Settings"), 70, StandardButton.Ok)
     }
 
     //-- Dumb camera trigger if no actual camera interface exists
     QGCButton {
         anchors.horizontalCenter:   parent.horizontalCenter
         text:                       qsTr("Trigger Camera")
-        visible:                    !_isCamera
-        onClicked:                  _activeVehicle.triggerCamera()
-        enabled:                    _activeVehicle
+        visible:                    !_camera
+        onClicked:                  activeVehicle.triggerCamera()
+        enabled:                    activeVehicle
     }
-    Item { width: 1; height: ScreenTools.defaultFontPixelHeight; visible: _isCamera; }
+    Item { width: 1; height: ScreenTools.defaultFontPixelHeight; visible: _camera; }
     //-- Actual controller
     QGCLabel {
         id:             cameraLabel
-        text:           _isCamera ? _camera.modelName : qsTr("Camera")
-        visible:        _isCamera
-        font.pointSize: ScreenTools.smallFontPointSize
+        text:           _camera ? _camera.modelName : qsTr("Camera")
+        visible:        _camera
+        font.pointSize: ScreenTools.defaultFontPointSize
         anchors.horizontalCenter: parent.horizontalCenter
     }
     QGCLabel {
         text: _camera ? qsTr("Free Space: ") + _camera.storageFreeStr : ""
-        font.pointSize: ScreenTools.smallFontPointSize
+        font.pointSize: ScreenTools.defaultFontPointSize
         anchors.horizontalCenter: parent.horizontalCenter
-        visible: _camera && !_noStorage
+        visible: _storageReady
+    }
+    QGCLabel {
+        text: _camera ? qsTr("Battery: ") + _camera.batteryRemainingStr : ""
+        font.pointSize: ScreenTools.defaultFontPointSize
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: _batteryReady
     }
     //-- Camera Mode (visible only if camera has modes)
     Item { width: 1; height: ScreenTools.defaultFontPixelHeight * 0.75; visible: camMode.visible; }
@@ -105,7 +115,7 @@ Column {
                 color:              _cameraVideoMode ? qgcPal.colorGreen : qgcPal.text
                 MouseArea {
                     anchors.fill:   parent
-                    enabled:        _cameraPhotoMode
+                    enabled:        _cameraPhotoMode && !_isShooting
                     onClicked: {
                         _camera.setVideoMode()
                     }
@@ -132,7 +142,7 @@ Column {
                 color:              _cameraPhotoMode ? qgcPal.colorGreen : qgcPal.text
                 MouseArea {
                     anchors.fill:   parent
-                    enabled:        _cameraVideoMode
+                    enabled:        _cameraVideoMode && !_isShooting
                     onClicked: {
                         _camera.setPhotoMode()
                     }
@@ -148,25 +158,25 @@ Column {
         width:      ScreenTools.defaultFontPixelWidth * 6
         height:     width
         radius:     width * 0.5
-        visible:    _isCamera
+        visible:    _camera
         border.color: qgcPal.buttonText
         border.width: 3
         anchors.horizontalCenter: parent.horizontalCenter
         Rectangle {
-            width:      parent.width * (_videoRecording || (_cameraPhotoMode && !_cameraPhotoIdle && _cameraElapsedMode) ? 0.5 : 0.75)
+            width:      parent.width * (_isShooting ? 0.5 : 0.75)
             height:     width
-            radius:     _videoRecording || (_cameraPhotoMode && !_cameraPhotoIdle && _cameraElapsedMode) ? 0 : width * 0.5
-            color:      _cameraModeUndefined ? qgcPal.colorGrey : qgcPal.colorRed
+            radius:     _isShooting ? 0 : width * 0.5
+            color:      _canShoot ? qgcPal.colorRed : qgcPal.colorGrey
             anchors.centerIn:   parent
         }
         MouseArea {
             anchors.fill:   parent
-            enabled:        !_cameraModeUndefined
+            enabled:        _canShoot
             onClicked: {
                 if(_cameraVideoMode) {
                     _camera.toggleVideo()
                 } else {
-                    if(_cameraPhotoMode && !_cameraPhotoIdle && _cameraElapsedMode) {
+                    if(_cameraPhotoMode && !_photoIdle && _cameraElapsedMode) {
                         _camera.stopTakePhoto()
                     } else {
                         _camera.takePhoto()
@@ -175,20 +185,22 @@ Column {
             }
         }
     }
-    Item { width: 1; height: ScreenTools.defaultFontPixelHeight * 0.75; visible: _isCamera; }
+    //-- Timer/Counter
+    Item { width: 1; height: ScreenTools.defaultFontPixelHeight * 0.75; visible: _camera; }
     QGCLabel {
         text: (_cameraVideoMode && _camera.videoStatus === QGCCameraControl.VIDEO_CAPTURE_STATUS_RUNNING) ? _camera.recordTimeStr : "00:00:00"
-        font.pointSize: ScreenTools.smallFontPointSize
+        font.pointSize: ScreenTools.defaultFontPointSize
         visible: _cameraVideoMode
         anchors.horizontalCenter: parent.horizontalCenter
     }
     QGCLabel {
-        text: _activeVehicle && _cameraPhotoMode ? ('00000' + _activeVehicle.cameraTriggerPoints.count).slice(-5) : "00000"
-        font.pointSize: ScreenTools.smallFontPointSize
+        text: activeVehicle && _cameraPhotoMode ? ('00000' + activeVehicle.cameraTriggerPoints.count).slice(-5) : "00000"
+        font.pointSize: ScreenTools.defaultFontPointSize
         visible: _cameraPhotoMode
         anchors.horizontalCenter: parent.horizontalCenter
     }
-    Item { width: 1; height: ScreenTools.defaultFontPixelHeight; visible: _isCamera; }
+    //-- Settings
+    Item { width: 1; height: ScreenTools.defaultFontPixelHeight; visible: _camera; }
     Component {
         id: cameraSettings
         QGCViewDialog {
@@ -203,9 +215,11 @@ Column {
                     anchors.left:   parent.left
                     anchors.right:  parent.right
                     spacing:        _margins
+                    //-------------------------------------------
+                    //-- Camera Selector
                     Row {
-                        visible:    _isCamera
-                        spacing:    ScreenTools.defaultFontPixelWidth
+                        spacing:            ScreenTools.defaultFontPixelWidth
+                        visible:            _isCamera && _dynamicCameras.cameraLabels.length > 1
                         anchors.horizontalCenter: parent.horizontalCenter
                         QGCLabel {
                             text:           qsTr("Camera Selector:")
@@ -218,6 +232,65 @@ Column {
                             width:          _editFieldWidth
                             onActivated:    _dynamicCameras.currentCamera = index
                             currentIndex:   _dynamicCameras.currentCamera
+                        }
+                    }
+                    //-------------------------------------------
+                    //-- Stream Selector
+                    Row {
+                        spacing:            ScreenTools.defaultFontPixelWidth
+                        visible:            _camera && _camera.streamLabels.length > 1
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        QGCLabel {
+                            text:           qsTr("Stream Selector:")
+                            width:          _labelFieldWidth
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        QGCComboBox {
+                            model:          _camera ? _camera.streamLabels : []
+                            width:          _editFieldWidth
+                            onActivated:    _camera.currentStream = index
+                            currentIndex:   _camera ? _camera.currentStream : 0
+                        }
+                    }
+                    //-------------------------------------------
+                    //-- Thermal Modes
+                    Row {
+                        spacing:            ScreenTools.defaultFontPixelWidth
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        visible:            QGroundControl.videoManager.hasThermal
+                        property var thermalModes: [qsTr("Off"), qsTr("Blend"), qsTr("Full"), qsTr("Picture In Picture")]
+                        QGCLabel {
+                            text:           qsTr("Thermal View Mode")
+                            width:          _labelFieldWidth
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        QGCComboBox {
+                            width:          _editFieldWidth
+                            model:          parent.thermalModes
+                            currentIndex:   _camera ? _camera.thermalMode : 0
+                            onActivated:    _camera.thermalMode = index
+                        }
+                    }
+                    //-------------------------------------------
+                    //-- Thermal Video Opacity
+                    Row {
+                        spacing:            ScreenTools.defaultFontPixelWidth
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        visible:            QGroundControl.videoManager.hasThermal && _camera.thermalMode === QGCCameraControl.THERMAL_BLEND
+                        QGCLabel {
+                            text:           qsTr("Blend Opacity")
+                            width:          _labelFieldWidth
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Slider {
+                            width:          _editFieldWidth
+                            maximumValue:   100
+                            minimumValue:   0
+                            value:          _camera ? _camera.thermalOpacity : 0
+                            updateValueWhileDragging: true
+                            onValueChanged: {
+                                _camera.thermalOpacity = value
+                            }
                         }
                     }
                     //-------------------------------------------
@@ -328,9 +401,52 @@ Column {
                         }
                     }
                     //-------------------------------------------
+                    // Grid Lines
+                    Row {
+                        visible:                _camera && _camera.autoStream
+                        spacing:                ScreenTools.defaultFontPixelWidth
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        QGCLabel {
+                           text:                qsTr("Grid Lines")
+                           width:               _labelFieldWidth
+                           anchors.verticalCenter: parent.verticalCenter
+                        }
+                        QGCSwitch {
+                            enabled:            _streamingEnabled && activeVehicle
+                            checked:            QGroundControl.settingsManager.videoSettings.gridLines.rawValue
+                            width:              _editFieldWidth
+                            anchors.verticalCenter: parent.verticalCenter
+                            onClicked: {
+                                if(checked) {
+                                    QGroundControl.settingsManager.videoSettings.gridLines.rawValue = 1
+                                } else {
+                                    QGroundControl.settingsManager.videoSettings.gridLines.rawValue = 0
+                                }
+                            }
+                        }
+                    }
+                    //-------------------------------------------
+                    //-- Video Fit
+                    Row {
+                        visible:                _camera && _camera.autoStream
+                        spacing:                ScreenTools.defaultFontPixelWidth
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        QGCLabel {
+                            text:               qsTr("Video Screen Fit")
+                            width:               _labelFieldWidth
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        FactComboBox {
+                            fact:               QGroundControl.settingsManager.videoSettings.videoFit
+                            indexModel:         false
+                            width:              _editFieldWidth
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    //-------------------------------------------
                     //-- Reset Camera
                     Row {
-                        spacing:        ScreenTools.defaultFontPixelWidth
+                        spacing:                ScreenTools.defaultFontPixelWidth
                         anchors.horizontalCenter: parent.horizontalCenter
                         QGCLabel {
                             text:       qsTr("Reset Camera Defaults")

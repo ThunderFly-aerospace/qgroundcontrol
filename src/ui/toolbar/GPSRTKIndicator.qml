@@ -7,10 +7,8 @@
  *
  ****************************************************************************/
 
-
-import QtQuick          2.3
-import QtQuick.Controls 1.2
-import QtQuick.Layouts  1.2
+import QtQuick          2.11
+import QtQuick.Layouts  1.11
 
 import QGroundControl                       1.0
 import QGroundControl.Controls              1.0
@@ -20,11 +18,12 @@ import QGroundControl.Palette               1.0
 //-------------------------------------------------------------------------
 //-- GPS Indicator
 Item {
-    id:             satelitte
+    id:             _root
     width:          (gpsValuesColumn.x + gpsValuesColumn.width) * 1.1
     anchors.top:    parent.top
     anchors.bottom: parent.bottom
-    visible:        QGroundControl.gpsRtk.connected.value
+
+    property bool showIndicator: QGroundControl.gpsRtk.connected.value
 
     Component {
         id: gpsInfo
@@ -79,12 +78,6 @@ Item {
                     QGCLabel { text: QGroundControl.gpsRtk.numSatellites.value }
                 }
             }
-
-            Component.onCompleted: {
-                var pos = mapFromItem(toolBar, centerX - (width / 2), toolBar.height)
-                x = pos.x
-                y = pos.y + ScreenTools.defaultFontPixelHeight
-            }
         }
     }
 
@@ -112,12 +105,11 @@ Item {
             text:                       QGroundControl.gpsRtk.numSatellites.value
         }
     }
-    
+
     MouseArea {
         anchors.fill:   parent
         onClicked: {
-            var centerX = mapToItem(toolBar, x, y).x + (width / 2)
-            mainWindow.showPopUp(gpsInfo, centerX)
+            mainWindow.showPopUp(_root, gpsInfo)
         }
     }
 }

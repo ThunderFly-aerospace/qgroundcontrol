@@ -12,8 +12,9 @@
 QGC_LOGGING_CATEGORY(CameraManagerLog, "CameraManagerLog")
 
 //-----------------------------------------------------------------------------
-QGCCameraManager::CameraStruct::CameraStruct(QObject* parent)
+QGCCameraManager::CameraStruct::CameraStruct(QObject* parent, uint8_t compID_)
     : QObject(parent)
+    , compID(compID_)
 {
 }
 
@@ -67,7 +68,8 @@ QGCCameraManager::_vehicleReady(bool ready)
 void
 QGCCameraManager::_mavlinkMessageReceived(const mavlink_message_t& message)
 {
-    if(message.sysid == _vehicle->id()) {
+    //-- Only pay attention to camera components, as identified by their compId
+    if(message.sysid == _vehicle->id() && (message.compid >= MAV_COMP_ID_CAMERA && message.compid <= MAV_COMP_ID_CAMERA6)) {
         switch (message.msgid) {
             case MAVLINK_MSG_ID_CAMERA_CAPTURE_STATUS:
                 _handleCaptureStatus(message);
@@ -96,6 +98,9 @@ QGCCameraManager::_mavlinkMessageReceived(const mavlink_message_t& message)
             case MAVLINK_MSG_ID_VIDEO_STREAM_STATUS:
                 _handleVideoStreamStatus(message);
                 break;
+            case MAVLINK_MSG_ID_BATTERY_STATUS:
+                _handleBatteryStatus(message);
+                break;
         }
     }
 }
@@ -106,39 +111,39 @@ QGCCameraManager::_handleHeartbeat(const mavlink_message_t &message)
 {
     mavlink_heartbeat_t heartbeat;
     mavlink_msg_heartbeat_decode(&message, &heartbeat);
-    //-- If this heartbeat is from a different component within the vehicle
-    if(_vehicleReadyState && _vehicle->id() == message.sysid && _vehicle->defaultComponentId() != message.compid) {
-        //-- First time hearing from this one?
-        if(!_cameraInfoRequest.contains(message.compid)) {
-            qCDebug(CameraManagerLog) << "Hearbeat from " << message.compid;
-            CameraStruct* pInfo = new CameraStruct(this);
-            pInfo->lastHeartbeat.start();
-            _cameraInfoRequest[message.compid] = pInfo;
-            //-- Request camera info
-            _requestCameraInfo(message.compid);
-        } else {
-            if(_cameraInfoRequest[message.compid]) {
-                //-- Check if we have indeed received the camera info
-                if(_cameraInfoRequest[message.compid]->infoReceived) {
-                    //-- We have it. Just update the heartbeat timeout
-                    _cameraInfoRequest[message.compid]->lastHeartbeat.start();
-                } else {
-                    //-- Try again. Maybe.
-                    if(_cameraInfoRequest[message.compid]->lastHeartbeat.elapsed() > 2000) {
-                        if(_cameraInfoRequest[message.compid]->tryCount > 3) {
-                            if(!_cameraInfoRequest[message.compid]->gaveUp) {
-                                _cameraInfoRequest[message.compid]->gaveUp = true;
-                                qWarning() << "Giving up requesting camera info from" << _vehicle->id() << message.compid;
-                            }
-                        } else {
-                            _cameraInfoRequest[message.compid]->tryCount++;
-                            //-- Request camera info. Again. It could be something other than a camera, in which
-                            //   case, we won't ever receive it.
-                            _requestCameraInfo(message.compid);
+    //-- First time hearing from this one?
+    QString sCompID = QString::number(message.compid);
+    if(!_cameraInfoRequest.contains(sCompID)) {
+        qCDebug(CameraManagerLog) << "Hearbeat from " << message.compid;
+        CameraStruct* pInfo = new CameraStruct(this, message.compid);
+        pInfo->lastHeartbeat.start();
+        _cameraInfoRequest[sCompID] = pInfo;
+        //-- Request camera info
+        _requestCameraInfo(message.compid);
+    } else {
+        if(_cameraInfoRequest[sCompID]) {
+            CameraStruct* pInfo = _cameraInfoRequest[sCompID];
+            //-- Check if we have indeed received the camera info
+            if(pInfo->infoReceived) {
+                //-- We have it. Just update the heartbeat timeout
+                pInfo->lastHeartbeat.start();
+            } else {
+                //-- Try again. Maybe.
+                if(pInfo->lastHeartbeat.elapsed() > 2000) {
+                    if(pInfo->tryCount > 3) {
+                        if(!pInfo->gaveUp) {
+                            pInfo->gaveUp = true;
+                            qWarning() << "Giving up requesting camera info from" << _vehicle->id() << message.compid;
                         }
+                    } else {
+                        pInfo->tryCount++;
+                        //-- Request camera info again.
+                        _requestCameraInfo(message.compid);
                     }
                 }
             }
+        } else {
+            qWarning() << "_cameraInfoRequest[" << sCompID << "] is null";
         }
     }
 }
@@ -167,6 +172,18 @@ QGCCameraManager::currentStreamInstance()
 }
 
 //-----------------------------------------------------------------------------
+QGCVideoStreamInfo*
+QGCCameraManager::thermalStreamInstance()
+{
+    QGCCameraControl* pCamera = currentCameraInstance();
+    if(pCamera) {
+        QGCVideoStreamInfo* pInfo = pCamera->thermalStreamInstance();
+        return pInfo;
+    }
+    return nullptr;
+}
+
+//-----------------------------------------------------------------------------
 QGCCameraControl*
 QGCCameraManager::_findCamera(int id)
 {
@@ -182,7 +199,7 @@ QGCCameraManager::_findCamera(int id)
             }
         }
     }
-    qWarning() << "Camera component id not found:" << id;
+    //qWarning() << "Camera component id not found:" << id;
     return nullptr;
 }
 
@@ -191,9 +208,10 @@ void
 QGCCameraManager::_handleCameraInfo(const mavlink_message_t& message)
 {
     //-- Have we requested it?
-    if(_cameraInfoRequest.contains(message.compid) && !_cameraInfoRequest[message.compid]->infoReceived) {
+    QString sCompID = QString::number(message.compid);
+    if(_cameraInfoRequest.contains(sCompID) && !_cameraInfoRequest[sCompID]->infoReceived) {
         //-- Flag it as done
-        _cameraInfoRequest[message.compid]->infoReceived = true;
+        _cameraInfoRequest[sCompID]->infoReceived = true;
         mavlink_camera_information_t info;
         mavlink_msg_camera_information_decode(&message, &info);
         qCDebug(CameraManagerLog) << "_handleCameraInfo:" << reinterpret_cast<const char*>(info.model_name) << reinterpret_cast<const char*>(info.vendor_name) << "Comp ID:" << message.compid;
@@ -213,27 +231,31 @@ void
 QGCCameraManager::_cameraTimeout()
 {
     //-- Iterate cameras
-    for(int i = 0; i < _cameraInfoRequest.count(); i++) {
-        if(_cameraInfoRequest[i]) {
+    foreach(QString sCompID, _cameraInfoRequest.keys()) {
+        if(_cameraInfoRequest[sCompID]) {
+            CameraStruct* pInfo = _cameraInfoRequest[sCompID];
             //-- Have we received a camera info message?
-            if(_cameraInfoRequest[i]->infoReceived) {
+            if(pInfo->infoReceived) {
                 //-- Has the camera stopped talking to us?
-                if(_cameraInfoRequest[i]->lastHeartbeat.elapsed() > 5000) {
+                if(pInfo->lastHeartbeat.elapsed() > 5000) {
                     //-- Camera is gone. Remove it.
-                    QGCCameraControl* pCamera = _findCamera(i);
-                    qWarning() << "Camera" << pCamera->modelName() << "stopped transmitting. Removing from list.";
-                    int idx = _cameraLabels.indexOf(pCamera->modelName());
-                    if(idx >= 0) {
-                        _cameraLabels.removeAt(idx);
+                    bool autoStream = false;
+                    QGCCameraControl* pCamera = _findCamera(pInfo->compID);
+                    if(pCamera) {
+                        qWarning() << "Camera" << pCamera->modelName() << "stopped transmitting. Removing from list.";
+                        int idx = _cameraLabels.indexOf(pCamera->modelName());
+                        if(idx >= 0) {
+                            _cameraLabels.removeAt(idx);
+                        }
+                        idx = _cameras.indexOf(pCamera);
+                        if(idx >= 0) {
+                            _cameras.removeAt(idx);
+                        }
+                        autoStream = pCamera->autoStream();
+                        pCamera->deleteLater();
+                        delete pInfo;
                     }
-                    idx = _cameras.indexOf(pCamera);
-                    if(idx >= 0) {
-                        _cameras.removeAt(idx);
-                    }
-                    bool autoStream = pCamera->autoStream();
-                    pCamera->deleteLater();
-                    delete _cameraInfoRequest[i];
-                    _cameraInfoRequest.remove(i);
+                    _cameraInfoRequest.remove(sCompID);
                     emit cameraLabelsChanged();
                     //-- If we have another camera, switch current camera.
                     if(_cameras.count()) {
@@ -339,6 +361,18 @@ QGCCameraManager::_handleVideoStreamStatus(const mavlink_message_t& message)
 
 //-----------------------------------------------------------------------------
 void
+QGCCameraManager::_handleBatteryStatus(const mavlink_message_t& message)
+{
+    QGCCameraControl* pCamera = _findCamera(message.compid);
+    if(pCamera) {
+        mavlink_battery_status_t batteryStatus;
+        mavlink_msg_battery_status_decode(&message, &batteryStatus);
+        pCamera->handleBatteryStatus(batteryStatus);
+    }
+}
+
+//-----------------------------------------------------------------------------
+void
 QGCCameraManager::_requestCameraInfo(int compID)
 {
     qCDebug(CameraManagerLog) << "_requestCameraInfo(" << compID << ")";
@@ -357,15 +391,67 @@ QGCCameraManager::_activeJoystickChanged(Joystick* joystick)
 {
     qCDebug(CameraManagerLog) << "Joystick changed";
     if(_activeJoystick) {
-        disconnect(_activeJoystick, &Joystick::stepZoom,   this, &QGCCameraManager::_stepZoom);
-        disconnect(_activeJoystick, &Joystick::stepCamera, this, &QGCCameraManager::_stepCamera);
-        disconnect(_activeJoystick, &Joystick::stepStream, this, &QGCCameraManager::_stepStream);
+        disconnect(_activeJoystick, &Joystick::stepZoom,            this, &QGCCameraManager::_stepZoom);
+        disconnect(_activeJoystick, &Joystick::startContinuousZoom, this, &QGCCameraManager::_startZoom);
+        disconnect(_activeJoystick, &Joystick::stopContinuousZoom,  this, &QGCCameraManager::_stopZoom);
+        disconnect(_activeJoystick, &Joystick::stepCamera,          this, &QGCCameraManager::_stepCamera);
+        disconnect(_activeJoystick, &Joystick::stepStream,          this, &QGCCameraManager::_stepStream);
+        disconnect(_activeJoystick, &Joystick::triggerCamera,       this, &QGCCameraManager::_triggerCamera);
+        disconnect(_activeJoystick, &Joystick::startVideoRecord,    this, &QGCCameraManager::_startVideoRecording);
+        disconnect(_activeJoystick, &Joystick::stopVideoRecord,     this, &QGCCameraManager::_stopVideoRecording);
+        disconnect(_activeJoystick, &Joystick::toggleVideoRecord,   this, &QGCCameraManager::_toggleVideoRecording);
     }
     _activeJoystick = joystick;
     if(_activeJoystick) {
-        connect(_activeJoystick, &Joystick::stepZoom,   this, &QGCCameraManager::_stepZoom);
-        connect(_activeJoystick, &Joystick::stepCamera, this, &QGCCameraManager::_stepCamera);
-        connect(_activeJoystick, &Joystick::stepStream, this, &QGCCameraManager::_stepStream);
+        connect(_activeJoystick, &Joystick::stepZoom,               this, &QGCCameraManager::_stepZoom);
+        connect(_activeJoystick, &Joystick::startContinuousZoom,    this, &QGCCameraManager::_startZoom);
+        connect(_activeJoystick, &Joystick::stopContinuousZoom,     this, &QGCCameraManager::_stopZoom);
+        connect(_activeJoystick, &Joystick::stepCamera,             this, &QGCCameraManager::_stepCamera);
+        connect(_activeJoystick, &Joystick::stepStream,             this, &QGCCameraManager::_stepStream);
+        connect(_activeJoystick, &Joystick::triggerCamera,          this, &QGCCameraManager::_triggerCamera);
+        connect(_activeJoystick, &Joystick::startVideoRecord,       this, &QGCCameraManager::_startVideoRecording);
+        connect(_activeJoystick, &Joystick::stopVideoRecord,        this, &QGCCameraManager::_stopVideoRecording);
+        connect(_activeJoystick, &Joystick::toggleVideoRecord,      this, &QGCCameraManager::_toggleVideoRecording);
+    }
+}
+
+//-----------------------------------------------------------------------------
+void
+QGCCameraManager::_triggerCamera()
+{
+    QGCCameraControl* pCamera = currentCameraInstance();
+    if(pCamera) {
+        pCamera->takePhoto();
+    }
+}
+
+//-----------------------------------------------------------------------------
+void
+QGCCameraManager::_startVideoRecording()
+{
+    QGCCameraControl* pCamera = currentCameraInstance();
+    if(pCamera) {
+        pCamera->startVideo();
+    }
+}
+
+//-----------------------------------------------------------------------------
+void
+QGCCameraManager::_stopVideoRecording()
+{
+    QGCCameraControl* pCamera = currentCameraInstance();
+    if(pCamera) {
+        pCamera->stopVideo();
+    }
+}
+
+//-----------------------------------------------------------------------------
+void
+QGCCameraManager::_toggleVideoRecording()
+{
+    QGCCameraControl* pCamera = currentCameraInstance();
+    if(pCamera) {
+        pCamera->toggleVideo();
     }
 }
 
@@ -373,13 +459,35 @@ QGCCameraManager::_activeJoystickChanged(Joystick* joystick)
 void
 QGCCameraManager::_stepZoom(int direction)
 {
-    if(_lastZoomChange.elapsed() > 250) {
+    if(_lastZoomChange.elapsed() > 40) {
         _lastZoomChange.start();
         qCDebug(CameraManagerLog) << "Step Camera Zoom" << direction;
         QGCCameraControl* pCamera = currentCameraInstance();
         if(pCamera) {
             pCamera->stepZoom(direction);
         }
+    }
+}
+
+//-----------------------------------------------------------------------------
+void
+QGCCameraManager::_startZoom(int direction)
+{
+    qCDebug(CameraManagerLog) << "Start Camera Zoom" << direction;
+    QGCCameraControl* pCamera = currentCameraInstance();
+    if(pCamera) {
+        pCamera->startZoom(direction);
+    }
+}
+
+//-----------------------------------------------------------------------------
+void
+QGCCameraManager::_stopZoom()
+{
+    qCDebug(CameraManagerLog) << "Stop Camera Zoom";
+    QGCCameraControl* pCamera = currentCameraInstance();
+    if(pCamera) {
+        pCamera->stopZoom();
     }
 }
 

@@ -160,6 +160,38 @@ void MAVLinkProtocol::resetMetadataForLink(LinkInterface *link)
 }
 
 /**
+ * This method parses all outcoming bytes and log a MAVLink packet.
+ * @param link The interface to read from
+ * @see LinkInterface
+ **/
+
+void MAVLinkProtocol::logSentBytes(LinkInterface* link, QByteArray b){
+
+    uint8_t bytes_time[sizeof(quint64)];
+
+    Q_UNUSED(link);
+    if (!_logSuspendError && !_logSuspendReplay && _tempLogFile.isOpen()) {
+
+        quint64 time = static_cast<quint64>(QDateTime::currentMSecsSinceEpoch() * 1000);
+
+        qToBigEndian(time,bytes_time);
+
+        b.insert(0,QByteArray((const char*)bytes_time,sizeof(bytes_time)));
+
+        int len = b.count();
+
+        if(_tempLogFile.write(b) != len)
+        {
+            // If there's an error logging data, raise an alert and stop logging.
+            emit protocolStatusMessage(tr("MAVLink Protocol"), tr("MAVLink Logging failed. Could not write to file %1, logging disabled.").arg(_tempLogFile.fileName()));
+            _stopLogging();
+            _logSuspendError = true;
+        }
+    }
+
+}
+
+/**
  * This method parses all incoming bytes and constructs a MAVLink packet.
  * It can handle multiple links in parallel, as each link has it's own buffer/
  * parsing state machine.
@@ -345,7 +377,7 @@ void MAVLinkProtocol::receiveBytes(LinkInterface* link, QByteArray b)
  **/
 QString MAVLinkProtocol::getName()
 {
-    return QString(tr("MAVLink protocol"));
+    return tr("MAVLink protocol");
 }
 
 /** @return System id of this application */
@@ -362,7 +394,7 @@ void MAVLinkProtocol::setSystemId(int id)
 /** @return Component id of this application */
 int MAVLinkProtocol::getComponentId()
 {
-    return 0;
+    return MAV_COMP_ID_MISSIONPLANNER;
 }
 
 void MAVLinkProtocol::enableVersionCheck(bool enabled)
@@ -404,9 +436,13 @@ void MAVLinkProtocol::_startLogging(void)
     if (qgcApp()->runningUnitTests()) {
         return;
     }
+    AppSettings* appSettings = _app->toolbox()->settingsManager()->appSettings();
+    if(appSettings->disableAllPersistence()->rawValue().toBool()) {
+        return;
+    }
 #ifdef __mobile__
     //-- Mobile build don't write to /tmp unless told to do so
-    if (!_app->toolbox()->settingsManager()->appSettings()->telemetrySave()->rawValue().toBool()) {
+    if (!appSettings->telemetrySave()->rawValue().toBool()) {
         return;
     }
 #endif
@@ -435,7 +471,8 @@ void MAVLinkProtocol::_stopLogging(void)
     if (_tempLogFile.isOpen()) {
         if (_closeLogFile()) {
             if ((_vehicleWasArmed || _app->toolbox()->settingsManager()->appSettings()->telemetrySaveNotArmed()->rawValue().toBool()) &&
-                _app->toolbox()->settingsManager()->appSettings()->telemetrySave()->rawValue().toBool()) {
+                _app->toolbox()->settingsManager()->appSettings()->telemetrySave()->rawValue().toBool() &&
+                !_app->toolbox()->settingsManager()->appSettings()->disableAllPersistence()->rawValue().toBool()) {
                 emit saveTelemetryLog(_tempLogFile.fileName());
             } else {
                 QFile::remove(_tempLogFile.fileName());
@@ -456,7 +493,7 @@ void MAVLinkProtocol::checkForLostLogFiles(void)
     QFileInfoList fileInfoList = tempDir.entryInfoList(QStringList(filter), QDir::Files);
     //qDebug() << "Orphaned log file count" << fileInfoList.count();
 
-    for(const QFileInfo fileInfo: fileInfoList) {
+    for(const QFileInfo& fileInfo: fileInfoList) {
         //qDebug() << "Orphaned log file" << fileInfo.filePath();
         if (fileInfo.size() == 0) {
             // Delete all zero length files

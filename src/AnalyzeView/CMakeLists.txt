@@ -9,6 +9,7 @@ endif()
 add_library(AnalyzeView
 	ExifParser.cc
 	GeoTagController.cc
+	MAVLinkInspectorController.cc
 	LogDownloadController.cc
 	MavlinkConsoleController.cc
 	PX4LogParser.cc
@@ -16,11 +17,22 @@ add_library(AnalyzeView
 	${EXTRA_SRC}
 )
 
+add_custom_target(AnalyzeViewQml
+	SOURCES
+		AnalyzePage.qml
+		AnalyzeView.qml
+		GeoTagPage.qml
+		LogDownloadPage.qml
+		MavlinkConsolePage.qml
+		MAVLinkInspectorPage.qml
+)
+
 target_link_libraries(AnalyzeView
 	PRIVATE
 		qgc
 
 	PUBLIC
+		Qt5::Charts
 		Qt5::Location
 		Qt5::SerialPort
 		Qt5::TextToSpeech

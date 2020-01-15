@@ -47,7 +47,7 @@ class QGCMapPalette : public QObject
     Q_PROPERTY(QColor thumbJoystick READ thumbJoystick NOTIFY paletteChanged)
 
 public:    
-    QGCMapPalette(QObject* parent = NULL);
+    QGCMapPalette(QObject* parent = nullptr);
     
     /// Text color
     QColor text(void)           const { return _text[_lightColors ? 0 : 1]; }
@@ -64,7 +64,7 @@ signals:
     void lightColorsChanged(bool lightColors);
     
 private:
-    bool _lightColors;
+    bool _lightColors = false;
 
     static const int _cColorGroups = 2;
 

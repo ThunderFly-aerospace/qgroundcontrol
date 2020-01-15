@@ -67,8 +67,6 @@ CameraSection::CameraSection(Vehicle* vehicle, QObject* parent)
     connect(this,                               &CameraSection::specifyGimbalChanged,       this, &CameraSection::_setDirty);
     connect(this,                               &CameraSection::specifyCameraModeChanged,   this, &CameraSection::_setDirty);
 
-    connect(this,                               &CameraSection::specifyGimbalChanged,       this, &CameraSection::_updateSpecifiedGimbalYaw);
-    connect(this,                               &CameraSection::specifyGimbalChanged,       this, &CameraSection::_updateSpecifiedGimbalPitch);
     connect(&_gimbalYawFact,                    &Fact::valueChanged,                        this, &CameraSection::_updateSpecifiedGimbalYaw);
     connect(&_gimbalPitchFact,                  &Fact::valueChanged,                        this, &CameraSection::_updateSpecifiedGimbalPitch);
 }
@@ -78,6 +76,8 @@ void CameraSection::setSpecifyGimbal(bool specifyGimbal)
     if (specifyGimbal != _specifyGimbal) {
         _specifyGimbal = specifyGimbal;
         emit specifyGimbalChanged(specifyGimbal);
+        emit specifiedGimbalYawChanged(specifiedGimbalYaw());
+        emit specifiedGimbalPitchChanged(specifiedGimbalPitch());
     }
 }
 
@@ -147,7 +147,7 @@ void CameraSection::appendSectionItems(QList<MissionItem*>& items, QObject* miss
     }
 
     if (_cameraActionFact.rawValue().toInt() != CameraActionNone) {
-        MissionItem* item = NULL;
+        MissionItem* item = nullptr;
 
         switch (_cameraActionFact.rawValue().toInt()) {
         case TakePhotosIntervalTime:
@@ -200,12 +200,13 @@ void CameraSection::appendSectionItems(QList<MissionItem*>& items, QObject* miss
             item = new MissionItem(nextSequenceNumber++,
                                    MAV_CMD_IMAGE_START_CAPTURE,
                                    MAV_FRAME_MISSION,
-                                   0,                                   // Reserved (Set to 0)
-                                   0,                                   // Interval (none)
-                                   1,                                   // Take 1 photo
-                                   qQNaN(), qQNaN(), qQNaN(), qQNaN(),  // reserved
-                                   true,                                // autoContinue
-                                   false,                               // isCurrentItem
+                                   0,                           // Reserved (Set to 0)
+                                   0,                           // Interval (none)
+                                   1,                           // Take 1 photo
+                                   0,                           // No sequence number specified
+                                   qQNaN(), qQNaN(), qQNaN(),   // reserved
+                                   true,                        // autoContinue
+                                   false,                       // isCurrentItem
                                    missionItemParent);
             break;
         }
@@ -578,7 +579,7 @@ void CameraSection::_cameraActionChanged(void)
 
 bool CameraSection::cameraModeSupported(void) const
 {
-    return _vehicle->firmwarePlugin()->supportedMissionCommands().contains(MAV_CMD_SET_CAMERA_MODE);
+    return _specifyCameraMode || _vehicle->firmwarePlugin()->supportedMissionCommands().contains(MAV_CMD_SET_CAMERA_MODE);
 }
 
 void CameraSection::_dirtyIfSpecified(void)

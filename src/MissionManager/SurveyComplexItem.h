@@ -39,6 +39,9 @@ public:
     // Overrides from ComplexMissionItem
     bool    load                (const QJsonObject& complexObject, int sequenceNumber, QString& errorString) final;
     QString mapVisualQML        (void) const final { return QStringLiteral("SurveyMapVisual.qml"); }
+    QString presetsSettingsGroup(void) { return settingsGroup; }
+    void    savePreset          (const QString& name);
+    void    loadPreset          (const QString& name);
 
     // Overrides from TransectStyleComplexItem
     void    save                (QJsonArray&  planItems) final;
@@ -48,10 +51,11 @@ public:
     double  timeBetweenShots    (void) final;
 
     // Overrides from VisualMissionionItem
-    QString commandDescription  (void) const final { return tr("Survey"); }
-    QString commandName         (void) const final { return tr("Survey"); }
-    QString abbreviation        (void) const final { return tr("S"); }
-    bool    readyForSave        (void) const final;
+    QString             commandDescription  (void) const final { return tr("Survey"); }
+    QString             commandName         (void) const final { return tr("Survey"); }
+    QString             abbreviation        (void) const final { return tr("S"); }
+    ReadyForSaveState   readyForSaveState    (void) const final;
+    double              additionalTimeDelay (void) const final;
 
     // Must match json spec for GridEntryLocation
     enum EntryLocation {
@@ -77,8 +81,9 @@ signals:
 
 private slots:
     // Overrides from TransectStyleComplexItem
-    void _rebuildTransectsPhase1(void) final;
-    void _rebuildTransectsPhase2(void) final;
+    void _rebuildTransectsPhase1    (void) final;
+    void _recalcComplexDistance     (void) final;
+    void _recalcCameraShots         (void) final;
 
 private:
     enum CameraTriggerCode {
@@ -112,7 +117,8 @@ private:
     double _turnaroundDistance(void) const;
     bool _hoverAndCaptureEnabled(void) const;
     bool _loadV3(const QJsonObject& complexObject, int sequenceNumber, QString& errorString);
-    bool _loadV4V5(const QJsonObject& complexObject, int sequenceNumber, QString& errorString, int version);
+    bool _loadV4V5(const QJsonObject& complexObject, int sequenceNumber, QString& errorString, int version, bool forPresets);
+    void _saveWorker(QJsonObject& complexObject);
     void _rebuildTransectsPhase1Worker(bool refly);
     void _rebuildTransectsPhase1WorkerSinglePolygon(bool refly);
     void _rebuildTransectsPhase1WorkerSplitPolygons(bool refly);
