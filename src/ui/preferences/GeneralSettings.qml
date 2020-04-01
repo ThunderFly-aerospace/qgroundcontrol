@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -36,13 +36,14 @@ Rectangle {
     property Fact _userBrandImageIndoor:        QGroundControl.settingsManager.brandImageSettings.userBrandImageIndoor
     property Fact _userBrandImageOutdoor:       QGroundControl.settingsManager.brandImageSettings.userBrandImageOutdoor
     property real _labelWidth:                  ScreenTools.defaultFontPixelWidth * 20
-    property real _comboFieldWidth:             ScreenTools.defaultFontPixelWidth * 28
+    property real _comboFieldWidth:             ScreenTools.defaultFontPixelWidth * 30
     property real _valueFieldWidth:             ScreenTools.defaultFontPixelWidth * 10
     property string _mapProvider:               QGroundControl.settingsManager.flightMapSettings.mapProvider.value
     property string _mapType:                   QGroundControl.settingsManager.flightMapSettings.mapType.value
     property Fact _followTarget:                QGroundControl.settingsManager.appSettings.followTarget
     property real _panelWidth:                  _root.width * _internalWidthRatio
     property real _margins:                     ScreenTools.defaultFontPixelWidth
+    property var _planViewSettings:             QGroundControl.settingsManager.planViewSettings
 
     property string _videoSource:               QGroundControl.settingsManager.videoSettings.videoSource.value
     property bool   _isGst:                     QGroundControl.videoManager.isGStreamer
@@ -197,14 +198,62 @@ Rectangle {
                                 }
 
                                 QGCLabel {
-                                    text:       qsTr("Stream GCS Position")
-                                    visible:    _followTarget.visible
+                                    text:                   qsTr("Stream GCS Position")
+                                    visible:                _followTarget.visible
                                 }
                                 FactComboBox {
                                     Layout.preferredWidth:  _comboFieldWidth
                                     fact:                   _followTarget
                                     indexModel:             false
                                     visible:                _followTarget.visible
+                                }
+                                QGCLabel {
+                                    text:                           qsTr("UI Scaling")
+                                    visible:                        _appFontPointSize.visible
+                                    Layout.alignment:               Qt.AlignVCenter
+                                }
+                                Item {
+                                    width:                          _comboFieldWidth
+                                    height:                         baseFontEdit.height * 1.5
+                                    visible:                        _appFontPointSize.visible
+                                    Layout.alignment:               Qt.AlignVCenter
+                                    Row {
+                                        spacing:                    ScreenTools.defaultFontPixelWidth
+                                        anchors.verticalCenter:     parent.verticalCenter
+                                        QGCButton {
+                                            width:                  height
+                                            height:                 baseFontEdit.height * 1.5
+                                            text:                   "-"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            onClicked: {
+                                                if (_appFontPointSize.value > _appFontPointSize.min) {
+                                                    _appFontPointSize.value = _appFontPointSize.value - 1
+                                                }
+                                            }
+                                        }
+                                        QGCLabel {
+                                            id:                     baseFontEdit
+                                            width:                  ScreenTools.defaultFontPixelWidth * 6
+                                            text:                   (QGroundControl.settingsManager.appSettings.appFontPointSize.value / ScreenTools.platformFontPointSize * 100).toFixed(0) + "%"
+                                            horizontalAlignment:    Text.AlignHCenter
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                        Text {
+
+                                        }
+
+                                        QGCButton {
+                                            width:                  height
+                                            height:                 baseFontEdit.height * 1.5
+                                            text:                   "+"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            onClicked: {
+                                                if (_appFontPointSize.value < _appFontPointSize.max) {
+                                                    _appFontPointSize.value = _appFontPointSize.value + 1
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -215,47 +264,13 @@ Rectangle {
                             anchors.left:       parent.left
                             anchors.right:      parent.right
                             anchors.top:        comboGridItem.bottom
+                            anchors.topMargin:  ScreenTools.defaultFontPixelHeight
                             height:             miscCol.height
 
                             ColumnLayout {
                                 id:                         miscCol
                                 anchors.horizontalCenter:   parent.horizontalCenter
                                 spacing:                    _margins
-
-                                RowLayout {
-                                    Layout.fillWidth:   false
-                                    Layout.alignment:   Qt.AlignHCenter
-                                    visible:             _appFontPointSize.visible
-
-                                    QGCLabel {
-                                        text:   qsTr("Font Size:")
-                                    }
-                                    QGCButton {
-                                        Layout.preferredWidth:  height
-                                        Layout.preferredHeight: baseFontEdit.height
-                                        text:                   "-"
-                                        onClicked: {
-                                            if (_appFontPointSize.value > _appFontPointSize.min) {
-                                                _appFontPointSize.value = _appFontPointSize.value - 1
-                                            }
-                                        }
-                                    }
-                                    FactTextField {
-                                        id:                     baseFontEdit
-                                        Layout.preferredWidth:  _valueFieldWidth
-                                        fact:                   QGroundControl.settingsManager.appSettings.appFontPointSize
-                                    }
-                                    QGCButton {
-                                        Layout.preferredWidth:  height
-                                        Layout.preferredHeight: baseFontEdit.height
-                                        text:                   "+"
-                                        onClicked: {
-                                            if (_appFontPointSize.value < _appFontPointSize.max) {
-                                                _appFontPointSize.value = _appFontPointSize.value + 1
-                                            }
-                                        }
-                                    }
-                                }
 
                                 FactCheckBox {
                                     text:       qsTr("Use Vehicle Pairing")
@@ -401,12 +416,15 @@ Rectangle {
                     Item { width: 1; height: _margins }
                     QGCLabel {
                         text:       qsTr("Telemetry Logs from Vehicle")
+                        visible:    telemetryRect.visible
                     }
                     Rectangle {
+                        id:                     telemetryRect
                         Layout.preferredHeight: loggingCol.height + (_margins * 2)
                         Layout.preferredWidth:  loggingCol.width + (_margins * 2)
                         color:                  qgcPal.windowShade
                         Layout.fillWidth:       true
+                        visible:                promptSaveLog._telemetrySave.visible || logIfNotArmed._telemetrySaveNotArmed.visible || promptSaveCsv._saveCsvTelemetry.visible
                         ColumnLayout {
                             id:                         loggingCol
                             anchors.margins:            _margins
@@ -461,11 +479,21 @@ Rectangle {
                             spacing:                    _margins
 
                             FactCheckBox {
-                                text:       qsTr("Use Preflight Checklist")
-                                fact:       _useChecklist
-                                visible:    _useChecklist.visible && QGroundControl.corePlugin.options.preFlightChecklistUrl.toString().length
+                                id:             useCheckList
+                                text:           qsTr("Use Preflight Checklist")
+                                fact:           _useChecklist
+                                visible:        _useChecklist.visible && QGroundControl.corePlugin.options.preFlightChecklistUrl.toString().length
 
                                 property Fact _useChecklist: QGroundControl.settingsManager.appSettings.useChecklist
+                            }
+
+                            FactCheckBox {
+                                text:           qsTr("Enforce Preflight Checklist")
+                                fact:           _enforceChecklist
+                                enabled:        QGroundControl.settingsManager.appSettings.useChecklist.value
+                                visible:        useCheckList.visible && _enforceChecklist.visible && QGroundControl.corePlugin.options.preFlightChecklistUrl.toString().length
+
+                                property Fact _enforceChecklist: QGroundControl.settingsManager.appSettings.enforceChecklist
                             }
 
                             FactCheckBox {
@@ -568,7 +596,7 @@ Rectangle {
                     QGCLabel {
                         id:         planViewSectionLabel
                         text:       qsTr("Plan View")
-                        visible:    QGroundControl.settingsManager.planViewSettings.visible
+                        visible:    _planViewSettings.visible
                     }
                     Rectangle {
                         Layout.preferredHeight: planViewCol.height + (_margins * 2)
@@ -593,6 +621,17 @@ Rectangle {
                                     Layout.preferredWidth:  _valueFieldWidth
                                     fact:                   QGroundControl.settingsManager.appSettings.defaultMissionItemAltitude
                                 }
+                            }
+
+                            FactCheckBox {
+                                text:   qsTr("Use MAV_CMD_CONDITION_GATE for pattern generation")
+                                fact:   QGroundControl.settingsManager.planViewSettings.useConditionGate
+                            }
+
+                            FactCheckBox {
+                                text:       qsTr("Missions Do Not Require Takeoff Item")
+                                fact:       _planViewSettings.takeoffItemNotRequired
+                                visible:    _planViewSettings.takeoffItemNotRequired.visible
                             }
                         }
                     }
@@ -856,16 +895,27 @@ Rectangle {
                         visible:    QGroundControl.settingsManager.adsbVehicleManagerSettings.visible
                     }
                     Rectangle {
-                        Layout.preferredHeight: adsbGrid.height + (_margins * 2)
+                        Layout.preferredHeight: adsbGrid.y + adsbGrid.height + _margins
                         Layout.preferredWidth:  adsbGrid.width + (_margins * 2)
                         color:                  qgcPal.windowShade
                         visible:                adsbSectionLabel.visible
                         Layout.fillWidth:       true
 
+                        QGCLabel {
+                            id:                 warningLabel
+                            anchors.margins:    _margins
+                            anchors.top:        parent.top
+                            anchors.left:       parent.left
+                            anchors.right:      parent.right
+                            font.pointSize:     ScreenTools.smallFontPointSize
+                            wrapMode:           Text.WordWrap
+                            text:               qsTr("Note: These setting are not meant for use with an ADSB transponder which is situated on the vehicle.")
+                        }
+
                         GridLayout {
                             id:                         adsbGrid
                             anchors.topMargin:          _margins
-                            anchors.top:                parent.top
+                            anchors.top:                warningLabel.bottom
                             Layout.fillWidth:           true
                             anchors.horizontalCenter:   parent.horizontalCenter
                             columns:                    2

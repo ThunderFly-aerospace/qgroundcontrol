@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -11,11 +11,11 @@
 #include "JsonHelper.h"
 #include "MissionController.h"
 #include "QGCGeo.h"
-#include "QGroundControlQmlGlobal.h"
 #include "SimpleMissionItem.h"
 #include "SettingsManager.h"
 #include "AppSettings.h"
 #include "MissionCommandUIInfo.h"
+#include "PlanMasterController.h"
 
 #include <QPolygonF>
 
@@ -25,12 +25,14 @@ const char* MissionSettingsItem::_plannedHomePositionAltitudeName = "PlannedHome
 
 QMap<QString, FactMetaData*> MissionSettingsItem::_metaDataMap;
 
-MissionSettingsItem::MissionSettingsItem(Vehicle* vehicle, bool flyView, QObject* parent)
-    : ComplexMissionItem                (vehicle, flyView, parent)
+MissionSettingsItem::MissionSettingsItem(PlanMasterController* masterController, bool flyView, QObject* parent)
+    : ComplexMissionItem                (masterController, flyView, parent)
+    , _managerVehicle                   (masterController->managerVehicle())
     , _plannedHomePositionAltitudeFact  (0, _plannedHomePositionAltitudeName,   FactMetaData::valueTypeDouble)
-    , _cameraSection                    (vehicle)
-    , _speedSection                     (vehicle)
+    , _cameraSection                    (masterController)
+    , _speedSection                     (masterController)
 {
+    _isIncomplete = false;
     _editorQml = "qrc:/qml/MissionSettingsEditor.qml";
 
     if (_metaDataMap.isEmpty()) {
@@ -53,10 +55,10 @@ MissionSettingsItem::MissionSettingsItem(Vehicle* vehicle, bool flyView, QObject
     connect(&_cameraSection,    &CameraSection::specifiedGimbalYawChanged,              this, &MissionSettingsItem::specifiedGimbalYawChanged);
     connect(&_cameraSection,    &CameraSection::specifiedGimbalPitchChanged,            this, &MissionSettingsItem::specifiedGimbalPitchChanged);
     connect(&_speedSection,     &SpeedSection::specifiedFlightSpeedChanged,             this, &MissionSettingsItem::specifiedFlightSpeedChanged);
-    connect(_vehicle,           &Vehicle::homePositionChanged,                          this, &MissionSettingsItem::_updateHomePosition);
     connect(&_plannedHomePositionAltitudeFact,  &Fact::rawValueChanged,                 this, &MissionSettingsItem::_updateAltitudeInCoordinate);
 
-    _updateHomePosition(_vehicle->homePosition());
+    connect(_managerVehicle, &Vehicle::homePositionChanged, this, &MissionSettingsItem::_updateHomePosition);
+    _updateHomePosition(_managerVehicle->homePosition());
 }
 
 int MissionSettingsItem::lastSequenceNumber(void) const

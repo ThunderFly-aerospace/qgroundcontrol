@@ -1,3 +1,12 @@
+################################################################################
+#
+# (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+#
+# QGroundControl is licensed according to the terms in the file
+# COPYING.md in the root of the source code directory.
+#
+################################################################################
+
 #
 # [REQUIRED] Add support for <inttypes.h> to Windows.
 #
@@ -138,12 +147,10 @@ contains(DEFINES, QGC_ENABLE_PAIRING) {
         } else {
             # There is some circular reference settings going on between QGCExternalLibs.pri and gqgroundcontrol.pro.
             # So this duplicates some of the enable/disable logic which would normally be in qgroundcontrol.pro.
-            DEFINES -= QGC_ENABLE_NFC
             DEFINES -= QGC_ENABLE_PAIRING
         }
     } else:WindowsBuild {
         #- Pairing is not supported on Windows
-        DEFINES -= QGC_ENABLE_NFC
         DEFINES -= QGC_ENABLE_PAIRING
     } else {
         LIBS += -lcrypto -lz

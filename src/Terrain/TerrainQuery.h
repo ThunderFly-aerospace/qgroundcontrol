@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2017 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -115,8 +115,9 @@ class TerrainTileManager : public QObject {
 public:
     TerrainTileManager(void);
 
-    void addCoordinateQuery (TerrainOfflineAirMapQuery* terrainQueryInterface, const QList<QGeoCoordinate>& coordinates);
-    void addPathQuery       (TerrainOfflineAirMapQuery* terrainQueryInterface, const QGeoCoordinate& startPoint, const QGeoCoordinate& endPoint);
+    void addCoordinateQuery         (TerrainOfflineAirMapQuery* terrainQueryInterface, const QList<QGeoCoordinate>& coordinates);
+    void addPathQuery               (TerrainOfflineAirMapQuery* terrainQueryInterface, const QGeoCoordinate& startPoint, const QGeoCoordinate& endPoint);
+    bool getAltitudesForCoordinates (const QList<QGeoCoordinate>& coordinates, QList<double>& altitudes, bool& error);
 
 private slots:
     void _terrainDone       (QByteArray responseBytes, QNetworkReply::NetworkError error);
@@ -141,7 +142,6 @@ private:
     } QueuedRequestInfo_t;
 
     void    _tileFailed                         (void);
-    bool    _getAltitudesForCoordinates         (const QList<QGeoCoordinate>& coordinates, QList<double>& altitudes, bool& error);
     QString _getTileHash                        (const QGeoCoordinate& coordinate);
 
     QList<QueuedRequestInfo_t>  _requestQueue;
@@ -206,6 +206,11 @@ public:
     /// is emitted.
     ///     @param coordinates to query
     void requestData(const QList<QGeoCoordinate>& coordinates);
+
+    /// Either returns altitudes from cache or queues database request
+    ///     @param[out] error true: altitude not returned due to error, false: altitudes returned
+    /// @return true: altitude returned (check error as well), false: database query queued (altitudes not returned)
+    static bool getAltitudesForCoordinates(const QList<QGeoCoordinate>& coordinates, QList<double>& altitudes, bool& error);
 
     // Internal method
     void _signalTerrainData(bool success, QList<double>& heights);

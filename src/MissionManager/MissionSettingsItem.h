@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -19,12 +19,14 @@
 
 Q_DECLARE_LOGGING_CATEGORY(MissionSettingsComplexItemLog)
 
+class PlanMasterController;
+
 class MissionSettingsItem : public ComplexMissionItem
 {
     Q_OBJECT
 
 public:
-    MissionSettingsItem(Vehicle* vehicle, bool flyView, QObject* parent);
+    MissionSettingsItem(PlanMasterController* masterController, bool flyView, QObject* parent);
 
     Q_PROPERTY(Fact*    plannedHomePositionAltitude READ plannedHomePositionAltitude                            CONSTANT)
     Q_PROPERTY(QObject* cameraSection               READ cameraSection                                          CONSTANT)
@@ -103,6 +105,7 @@ private slots:
     void _updateHomePosition                    (const QGeoCoordinate& homePosition);
 
 private:
+    Vehicle*        _managerVehicle =                   nullptr;
     QGeoCoordinate  _plannedHomePositionCoordinate;     // Does not include altitude
     Fact            _plannedHomePositionAltitudeFact;
     int             _sequenceNumber =                   0;

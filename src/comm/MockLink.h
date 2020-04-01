@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2018 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -134,7 +134,8 @@ public:
 
     /// Sets a failure mode for unit testing
     ///     @param failureMode Type of failure to simulate
-    void setMissionItemFailureMode(MockLinkMissionItemHandler::FailureMode_t failureMode);
+    ///     @param failureAckResult Error to send if one the ack error modes
+    void setMissionItemFailureMode(MockLinkMissionItemHandler::FailureMode_t failureMode, MAV_MISSION_RESULT failureAckResult);
 
     /// Called to send a MISSION_ACK message while the MissionManager is in idle state
     void sendUnexpectedMissionAck(MAV_MISSION_RESULT ackType) { _missionItemHandler.sendUnexpectedMissionAck(ackType); }
@@ -175,35 +176,36 @@ private:
     virtual void run(void);
 
     // MockLink methods
-    void _sendHeartBeat(void);
-    void _sendHighLatency2(void);
-    void _handleIncomingNSHBytes(const char* bytes, int cBytes);
-    void _handleIncomingMavlinkBytes(const uint8_t* bytes, int cBytes);
-    void _loadParams(void);
-    void _handleHeartBeat(const mavlink_message_t& msg);
-    void _handleSetMode(const mavlink_message_t& msg);
-    void _handleParamRequestList(const mavlink_message_t& msg);
-    void _handleParamSet(const mavlink_message_t& msg);
-    void _handleParamRequestRead(const mavlink_message_t& msg);
-    void _handleFTP(const mavlink_message_t& msg);
-    void _handleCommandLong(const mavlink_message_t& msg);
-    void _handleManualControl(const mavlink_message_t& msg);
-    void _handlePreFlightCalibration(const mavlink_command_long_t& request);
-    void _handleLogRequestList(const mavlink_message_t& msg);
-    void _handleLogRequestData(const mavlink_message_t& msg);
-    float _floatUnionForParam(int componentId, const QString& paramName);
-    void _setParamFloatUnionIntoMap(int componentId, const QString& paramName, float paramFloat);
-    void _sendHomePosition(void);
-    void _sendGpsRawInt(void);
-    void _sendVibration(void);
-    void _sendSysStatus(void);
-    void _sendStatusTextMessages(void);
-    void _respondWithAutopilotVersion(void);
-    void _sendRCChannels(void);
-    void _paramRequestListWorker(void);
-    void _logDownloadWorker(void);
-    void _sendADSBVehicles(void);
-    void _moveADSBVehicle(void);
+    void _sendHeartBeat                 (void);
+    void _sendHighLatency2              (void);
+    void _handleIncomingNSHBytes        (const char* bytes, int cBytes);
+    void _handleIncomingMavlinkBytes    (const uint8_t* bytes, int cBytes);
+    void _loadParams                    (void);
+    void _handleHeartBeat               (const mavlink_message_t& msg);
+    void _handleSetMode                 (const mavlink_message_t& msg);
+    void _handleParamRequestList        (const mavlink_message_t& msg);
+    void _handleParamSet                (const mavlink_message_t& msg);
+    void _handleParamRequestRead        (const mavlink_message_t& msg);
+    void _handleFTP                     (const mavlink_message_t& msg);
+    void _handleCommandLong             (const mavlink_message_t& msg);
+    void _handleManualControl           (const mavlink_message_t& msg);
+    void _handlePreFlightCalibration    (const mavlink_command_long_t& request);
+    void _handleLogRequestList          (const mavlink_message_t& msg);
+    void _handleLogRequestData          (const mavlink_message_t& msg);
+    float _floatUnionForParam           (int componentId, const QString& paramName);
+    void _setParamFloatUnionIntoMap     (int componentId, const QString& paramName, float paramFloat);
+    void _sendHomePosition              (void);
+    void _sendGpsRawInt                 (void);
+    void _sendVibration                 (void);
+    void _sendSysStatus                 (void);
+    void _sendStatusTextMessages        (void);
+    void _sendChunkedStatusText         (uint16_t chunkId, bool missingChunks);
+    void _respondWithAutopilotVersion   (void);
+    void _sendRCChannels                (void);
+    void _paramRequestListWorker        (void);
+    void _logDownloadWorker             (void);
+    void _sendADSBVehicles              (void);
+    void _moveADSBVehicle               (void);
 
     static MockLink* _startMockLinkWorker(QString configName, MAV_AUTOPILOT firmwareType, MAV_TYPE vehicleType, bool sendStatusText, MockConfiguration::FailureMode_t failureMode);
     static MockLink* _startMockLink(MockConfiguration* mockConfig);

@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -24,6 +24,7 @@
 #include "AppSettings.h"
 #include "AirspaceManager.h"
 #include "ADSBVehicleManager.h"
+#include "QGCPalette.h"
 #if defined(QGC_ENABLE_PAIRING)
 #include "PairingManager.h"
 #endif
@@ -81,6 +82,7 @@ public:
     Q_PROPERTY(MicrohardManager*    microhardManager    READ microhardManager       CONSTANT)
     Q_PROPERTY(bool                 microhardSupported  READ microhardSupported     CONSTANT)
     Q_PROPERTY(bool                 supportsPairing     READ supportsPairing        CONSTANT)
+    Q_PROPERTY(QGCPalette*          globalPalette       MEMBER _globalPalette       CONSTANT)   // This palette will always return enabled colors
 #if defined(QGC_ENABLE_PAIRING)
     Q_PROPERTY(PairingManager*      pairingManager      READ pairingManager         CONSTANT)
 #endif
@@ -280,6 +282,7 @@ private:
     TaisyncManager*         _taisyncManager         = nullptr;
     MicrohardManager*       _microhardManager       = nullptr;
     ADSBVehicleManager*     _adsbVehicleManager     = nullptr;
+    QGCPalette*             _globalPalette          = nullptr;
 #if defined(QGC_ENABLE_PAIRING)
     PairingManager*         _pairingManager         = nullptr;
 #endif

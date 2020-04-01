@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -15,6 +15,7 @@
 #include "APMAirframeComponentController.h"
 #include "APMSensorsComponentController.h"
 #include "APMFollowComponentController.h"
+#include "APMSubMotorComponentController.h"
 #include "MissionManager.h"
 #include "ParameterManager.h"
 #include "QGCFileDownload.h"
@@ -160,6 +161,7 @@ APMFirmwarePlugin::APMFirmwarePlugin(void)
     qmlRegisterType<APMAirframeComponentController>     ("QGroundControl.Controllers", 1, 0, "APMAirframeComponentController");
     qmlRegisterType<APMSensorsComponentController>      ("QGroundControl.Controllers", 1, 0, "APMSensorsComponentController");
     qmlRegisterType<APMFollowComponentController>       ("QGroundControl.Controllers", 1, 0, "APMFollowComponentController");
+    qmlRegisterType<APMSubMotorComponentController>     ("QGroundControl.Controllers", 1, 0, "APMSubMotorComponentController");
 }
 
 AutoPilotPlugin* APMFirmwarePlugin::autopilotPlugin(Vehicle* vehicle)
@@ -337,20 +339,15 @@ void APMFirmwarePlugin::_handleOutgoingParamSet(Vehicle* vehicle, LinkInterface*
     mavlink_msg_param_set_encode_chan(message->sysid, message->compid, outgoingLink->mavlinkChannel(), message, &paramSet);
 }
 
-bool APMFirmwarePlugin::_handleIncomingStatusText(Vehicle* vehicle, mavlink_message_t* message, bool longVersion)
+bool APMFirmwarePlugin::_handleIncomingStatusText(Vehicle* vehicle, mavlink_message_t* message)
 {
     QString messageText;
     APMFirmwarePluginInstanceData* instanceData = qobject_cast<APMFirmwarePluginInstanceData*>(vehicle->firmwarePluginInstanceData());
 
-    int severity;
-    if (longVersion) {
-        severity = mavlink_msg_statustext_long_get_severity(message);
-    } else {
-        severity = mavlink_msg_statustext_get_severity(message);
-    }
+    int severity = mavlink_msg_statustext_get_severity(message);
 
     if (vehicle->firmwareMajorVersion() == Vehicle::versionNotSetValue || severity < MAV_SEVERITY_NOTICE) {
-        messageText = _getMessageText(message, longVersion);
+        messageText = _getMessageText(message);
         qCDebug(APMFirmwarePluginLog) << messageText;
 
         if (!messageText.contains(APM_SOLO_REXP)) {
@@ -421,14 +418,14 @@ bool APMFirmwarePlugin::_handleIncomingStatusText(Vehicle* vehicle, mavlink_mess
     }
 
     if (messageText.isEmpty()) {
-        messageText = _getMessageText(message, longVersion);
+        messageText = _getMessageText(message);
     }
 
     // The following messages are incorrectly labeled as warning message.
     // Fixed in newer firmware (unreleased at this point), but still in older firmware.
     if (messageText.contains(APM_COPTER_REXP) || messageText.contains(APM_PLANE_REXP) || messageText.contains(APM_ROVER_REXP) || messageText.contains(APM_SUB_REXP) ||
             messageText.contains(APM_PX4NUTTX_REXP) || messageText.contains(APM_FRAME_REXP) || messageText.contains(APM_SYSID_REXP)) {
-        _setInfoSeverity(message, longVersion);
+        _setInfoSeverity(message);
     }
 
     if (messageText.contains(APM_SOLO_REXP)) {
@@ -436,7 +433,7 @@ bool APMFirmwarePlugin::_handleIncomingStatusText(Vehicle* vehicle, mavlink_mess
         vehicle->setSoloFirmware(true);
 
         // Fix up severity
-        _setInfoSeverity(message, longVersion);
+        _setInfoSeverity(message);
 
         // Start TCP video handshake with ARTOO
         _soloVideoHandshake(vehicle, true /* originalSoloFirmware */);
@@ -497,9 +494,7 @@ bool APMFirmwarePlugin::adjustIncomingMavlinkMessage(Vehicle* vehicle, mavlink_m
             _handleIncomingParamValue(vehicle, message);
             break;
         case MAVLINK_MSG_ID_STATUSTEXT:
-            return _handleIncomingStatusText(vehicle, message, false /* longVersion */);
-        case MAVLINK_MSG_ID_STATUSTEXT_LONG:
-            return _handleIncomingStatusText(vehicle, message, true /* longVersion */);
+            return _handleIncomingStatusText(vehicle, message);
         case MAVLINK_MSG_ID_RC_CHANNELS:
             _handleRCChannels(vehicle, message);
             break;
@@ -521,17 +516,12 @@ void APMFirmwarePlugin::adjustOutgoingMavlinkMessage(Vehicle* vehicle, LinkInter
     }
 }
 
-QString APMFirmwarePlugin::_getMessageText(mavlink_message_t* message, bool longVersion) const
+QString APMFirmwarePlugin::_getMessageText(mavlink_message_t* message) const
 {
     QByteArray b;
 
-    if (longVersion) {
-        b.resize(MAVLINK_MSG_STATUSTEXT_LONG_FIELD_TEXT_LEN+1);
-        mavlink_msg_statustext_long_get_text(message, b.data());
-    } else {
-        b.resize(MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1);
-        mavlink_msg_statustext_get_text(message, b.data());
-    }
+    b.resize(MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1);
+    mavlink_msg_statustext_get_text(message, b.data());
 
     // Ensure NUL-termination
     b[b.length()-1] = '\0';
@@ -593,33 +583,21 @@ void APMFirmwarePlugin::_adjustSeverity(mavlink_message_t* message) const
                                        &statusText);
 }
 
-void APMFirmwarePlugin::_setInfoSeverity(mavlink_message_t* message, bool longVersion) const
+void APMFirmwarePlugin::_setInfoSeverity(mavlink_message_t* message) const
 {
     // Re-Encoding is always done using mavlink 1.0
     mavlink_status_t* mavlinkStatusReEncode = mavlink_get_channel_status(0);
     mavlinkStatusReEncode->flags |= MAVLINK_STATUS_FLAG_IN_MAVLINK1;
 
-    if (longVersion) {
-        mavlink_statustext_long_t statusTextLong;
-        mavlink_msg_statustext_long_decode(message, &statusTextLong);
+    mavlink_statustext_t statusText;
+    mavlink_msg_statustext_decode(message, &statusText);
 
-        statusTextLong.severity = MAV_SEVERITY_INFO;
-        mavlink_msg_statustext_long_encode_chan(message->sysid,
-                                                message->compid,
-                                                0,                  // Re-encoding uses reserved channel 0
-                                                message,
-                                                &statusTextLong);
-    } else {
-        mavlink_statustext_t statusText;
-        mavlink_msg_statustext_decode(message, &statusText);
-
-        statusText.severity = MAV_SEVERITY_INFO;
-        mavlink_msg_statustext_encode_chan(message->sysid,
-                                           message->compid,
-                                           0,                  // Re-encoding uses reserved channel 0
-                                           message,
-                                           &statusText);
-    }
+    statusText.severity = MAV_SEVERITY_INFO;
+    mavlink_msg_statustext_encode_chan(message->sysid,
+                                       message->compid,
+                                       0,                  // Re-encoding uses reserved channel 0
+                                       message,
+                                       &statusText);
 }
 
 void APMFirmwarePlugin::_adjustCalibrationMessageSeverity(mavlink_message_t* message) const
@@ -1134,15 +1112,16 @@ void APMFirmwarePlugin::_sendGCSMotionReport(Vehicle* vehicle, FollowMe::GCSMoti
     mavlink_global_position_int_t globalPositionInt;
     memset(&globalPositionInt, 0, sizeof(globalPositionInt));
 
+    // Important note: QGC only supports sending the constant GCS home position altitude for follow me.
     globalPositionInt.time_boot_ms =    static_cast<uint32_t>(qgcApp()->msecsSinceBoot());
     globalPositionInt.lat =             motionReport.lat_int;
     globalPositionInt.lon =             motionReport.lon_int;
-    globalPositionInt.alt =             static_cast<int32_t>(motionReport.altMetersAMSL * 1000);                                        // mm
-    globalPositionInt.relative_alt =    static_cast<int32_t>((motionReport.altMetersAMSL - vehicle->homePosition().altitude()) * 1000); // mm
-    globalPositionInt.vx =              static_cast<int16_t>(motionReport.vxMetersPerSec * 100);                                        // cm/sec
-    globalPositionInt.vy =              static_cast<int16_t>(motionReport.vyMetersPerSec * 100);                                        // cm/sec
-    globalPositionInt.vy =              static_cast<int16_t>(motionReport.vzMetersPerSec * 100);                                        // cm/sec
-    globalPositionInt.hdg =             static_cast<uint16_t>(motionReport.headingDegrees * 100.0);                                     // centi-degrees
+    globalPositionInt.alt =             static_cast<int32_t>(vehicle->homePosition().altitude() * 1000);    // mm
+    globalPositionInt.relative_alt =    static_cast<int32_t>(0);                                            // mm
+    globalPositionInt.vx =              static_cast<int16_t>(motionReport.vxMetersPerSec * 100);            // cm/sec
+    globalPositionInt.vy =              static_cast<int16_t>(motionReport.vyMetersPerSec * 100);            // cm/sec
+    globalPositionInt.vy =              static_cast<int16_t>(motionReport.vzMetersPerSec * 100);            // cm/sec
+    globalPositionInt.hdg =             static_cast<uint16_t>(motionReport.headingDegrees * 100.0);         // centi-degrees
 
     mavlink_message_t message;
     mavlink_msg_global_position_int_encode_chan(static_cast<uint8_t>(mavlinkProtocol->getSystemId()),

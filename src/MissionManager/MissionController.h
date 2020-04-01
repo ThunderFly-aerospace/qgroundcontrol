@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -13,7 +13,7 @@
 #include "QmlObjectListModel.h"
 #include "Vehicle.h"
 #include "QGCLoggingCategory.h"
-
+#include "KMLPlanDomDocument.h"
 #include "QGCGeoBoundingCube.h"
 
 #include <QHash>
@@ -28,6 +28,7 @@ class SimpleMissionItem;
 class ComplexMissionItem;
 class MissionSettingsItem;
 class QDomDocument;
+class PlanViewSettings;
 
 Q_DECLARE_LOGGING_CATEGORY(MissionControllerLog)
 
@@ -95,6 +96,7 @@ public:
     Q_PROPERTY(QString              surveyComplexItemName           READ surveyComplexItemName          CONSTANT)
     Q_PROPERTY(QString              corridorScanComplexItemName     READ corridorScanComplexItemName    CONSTANT)
     Q_PROPERTY(QString              structureScanComplexItemName    READ structureScanComplexItemName   CONSTANT)
+    Q_PROPERTY(bool                 onlyInsertTakeoffValid          MEMBER _onlyInsertTakeoffValid      NOTIFY onlyInsertTakeoffValidChanged)
     Q_PROPERTY(bool                 isInsertTakeoffValid            MEMBER _isInsertTakeoffValid        NOTIFY isInsertTakeoffValidChanged)
     Q_PROPERTY(bool                 isInsertLandValid               MEMBER _isInsertLandValid           NOTIFY isInsertLandValidChanged)
     Q_PROPERTY(bool                 isROIActive                     MEMBER _isROIActive                 NOTIFY isROIActiveChanged)
@@ -190,11 +192,10 @@ public:
     bool dirty                      (void) const final;
     void setDirty                   (bool dirty) final;
     bool containsItems              (void) const final;
-    void managerVehicleChanged      (Vehicle* managerVehicle) final;
     bool showPlanFromManagerVehicle (void) final;
 
     // Create KML file
-    void convertToKMLDocument(QDomDocument& document);
+    void addMissionToKML(KMLPlanDomDocument& planKML);
 
     // Property accessors
 
@@ -264,6 +265,7 @@ signals:
     void currentPlanViewItemChanged         (void);
     void missionBoundingCubeChanged         (void);
     void missionItemCountChanged            (int missionItemCount);
+    void onlyInsertTakeoffValidChanged      (void);
     void isInsertTakeoffValidChanged        (void);
     void isInsertLandValidChanged           (void);
     void isROIActiveChanged                 (void);
@@ -286,6 +288,8 @@ private slots:
     void _updateTimeout                         (void);
     void _complexBoundingBoxChanged             (void);
     void _recalcAll                             (void);
+    void _managerVehicleChanged                 (Vehicle* managerVehicle);
+    void _takeoffItemNotRequiredChanged         (void);
 
 private:
     void _init(void);
@@ -310,7 +314,7 @@ private:
     bool _loadJsonMissionFileV2(const QJsonObject& json, QmlObjectListModel* visualItems, QString& errorString);
     bool _loadTextMissionFile(QTextStream& stream, QmlObjectListModel* visualItems, QString& errorString);
     int _nextSequenceNumber(void);
-    void _scanForAdditionalSettings(QmlObjectListModel* visualItems, Vehicle* vehicle);
+    void _scanForAdditionalSettings(QmlObjectListModel* visualItems, PlanMasterController* masterController);
     static bool _convertToMissionItems(QmlObjectListModel* visualMissionItems, QList<MissionItem*>& rgMissionItems, QObject* missionItemParent);
     void _setPlannedHomePositionFromFirstCoordinate(const QGeoCoordinate& clickCoordinate);
     void _resetMissionFlightStatus(void);
@@ -323,39 +327,42 @@ private:
     void _addTimeDistance(bool vtolInHover, double hoverTime, double cruiseTime, double extraTime, double distance, int seqNum);
     VisualMissionItem* _insertSimpleMissionItemWorker(QGeoCoordinate coordinate, MAV_CMD command, int visualItemIndex, bool makeCurrentItem);
     void _insertComplexMissionItemWorker(const QGeoCoordinate& mapCenterCoordinate, ComplexMissionItem* complexItem, int visualItemIndex, bool makeCurrentItem);
-    void _warnIfTerrainFrameUsed(void);
     bool _isROIBeginItem(SimpleMissionItem* simpleItem);
     bool _isROICancelItem(SimpleMissionItem* simpleItem);
     CoordinateVector* _createCoordinateVectorWorker(VisualItemPair& pair);
 
 private:
-    MissionManager*         _missionManager;
-    int                     _missionItemCount;
-    QmlObjectListModel*     _visualItems;
-    MissionSettingsItem*    _settingsItem;
+    Vehicle*                _controllerVehicle =            nullptr;
+    Vehicle*                _managerVehicle =               nullptr;
+    MissionManager*         _missionManager =               nullptr;
+    int                     _missionItemCount =             0;
+    QmlObjectListModel*     _visualItems =                  nullptr;
+    MissionSettingsItem*    _settingsItem =                 nullptr;
+    PlanViewSettings*       _planViewSettings =             nullptr;
     QmlObjectListModel      _waypointLines;
     QVariantList            _waypointPath;
     QmlObjectListModel      _directionArrows;
     QmlObjectListModel      _incompleteComplexItemLines;
     CoordVectHashTable      _linesTable;
-    bool                    _firstItemsFromVehicle;
-    bool                    _itemsRequested;
-    bool                    _inRecalcSequence;
+    bool                    _firstItemsFromVehicle =        false;
+    bool                    _itemsRequested =               false;
+    bool                    _inRecalcSequence =             false;
     MissionFlightStatus_t   _missionFlightStatus;
-    AppSettings*            _appSettings;
-    double                  _progressPct;
-    int                     _currentPlanViewSeqNum;
-    int                     _currentPlanViewVIIndex;
-    VisualMissionItem*      _currentPlanViewItem;
+    AppSettings*            _appSettings =                  nullptr;
+    double                  _progressPct =                  0;
+    int                     _currentPlanViewSeqNum =        -1;
+    int                     _currentPlanViewVIIndex =       -1;
+    VisualMissionItem*      _currentPlanViewItem =          nullptr;
     QTimer                  _updateTimer;
     QGCGeoBoundingCube      _travelBoundingCube;
     QGeoCoordinate          _takeoffCoordinate;
     QGeoCoordinate          _previousCoordinate;
-    CoordinateVector*       _splitSegment;
+    CoordinateVector*       _splitSegment =                 nullptr;
+    bool                    _onlyInsertTakeoffValid =       true;
     bool                    _isInsertTakeoffValid =         true;
-    bool                    _isInsertLandValid =            true;
+    bool                    _isInsertLandValid =            false;
     bool                    _isROIActive =                  false;
-    bool                    _flyThroughCommandsAllowed =    true;
+    bool                    _flyThroughCommandsAllowed =    false;
     bool                    _isROIBeginCurrentItem =        false;
 
     static const char*  _settingsGroup;

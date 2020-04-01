@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -21,11 +21,12 @@ import QGroundControl.ScreenTools   1.0
 import QGroundControl.FlightDisplay 1.0
 import QGroundControl.FlightMap     1.0
 
-/// Native QML top level window
+/// @brief Native QML top level window
+/// All properties defined here are visible to all QML pages.
 ApplicationWindow {
     id:             mainWindow
-    minimumWidth:   ScreenTools.isMobile ? Screen.width  : Math.min(215 * Screen.pixelDensity, Screen.width)
-    minimumHeight:  ScreenTools.isMobile ? Screen.height : Math.min(120 * Screen.pixelDensity, Screen.height)
+    minimumWidth:   ScreenTools.isMobile ? Screen.width  : Math.min(ScreenTools.defaultFontPixelWidth * 100, Screen.width)
+    minimumHeight:  ScreenTools.isMobile ? Screen.height : Math.min(ScreenTools.defaultFontPixelWidth * 50, Screen.height)
     visible:        true
 
     Component.onCompleted: {
@@ -48,9 +49,12 @@ ApplicationWindow {
     //-------------------------------------------------------------------------
     //-- Global Scope Variables
 
+    /// Current active Vehicle
     property var                activeVehicle:              QGroundControl.multiVehicleManager.activeVehicle
+    /// Indicates communication with vehicle is list (no heartbeats)
     property bool               communicationLost:          activeVehicle ? activeVehicle.connectionLost : false
     property string             formatedMessage:            activeVehicle ? activeVehicle.formatedMessage : ""
+    /// Indicates usable height between toolbar and footer
     property real               availableHeight:            mainWindow.height - mainWindow.header.height - mainWindow.footer.height
 
     property var                currentPlanMissionItem:     planMasterControllerPlan ? planMasterControllerPlan.missionController.currentPlanViewItem : null
@@ -62,6 +66,7 @@ ApplicationWindow {
     readonly property real      defaultTextHeight:          ScreenTools.defaultFontPixelHeight
     readonly property real      defaultTextWidth:           ScreenTools.defaultFontPixelWidth
 
+    /// Default color palette used throughout the UI
     QGCPalette { id: qgcPal; colorGroupEnabled: true }
 
     //-------------------------------------------------------------------------
@@ -108,6 +113,10 @@ ApplicationWindow {
     }
 
     function showFlyView() {
+        if (!flightView.visible) {
+            flightView.showPreflightChecklistIfNeeded()
+        }
+
         viewSwitch(false)
         flightView.visible = true
     }
@@ -144,6 +153,7 @@ ApplicationWindow {
         simpleMessageDialog.open()
     }
 
+    /// Saves main window position and size
     MainWindowSavedState {
         window: mainWindow
     }
@@ -207,7 +217,7 @@ ApplicationWindow {
             dlgLoader.source = "QGCViewDialogContainer.qml"
         }
         onClosed: {
-            console.log("View switch ok")
+            //console.log("View switch ok")
             mainWindow.popPreventViewSwitch()
             dlgLoader.source = ""
         }
@@ -287,14 +297,14 @@ ApplicationWindow {
     }
 
     //-------------------------------------------------------------------------
-    //-- Main, full window background (Fly View)
+    /// Main, full window background (Fly View)
     background: Item {
         id:             rootBackground
         anchors.fill:   parent
     }
 
     //-------------------------------------------------------------------------
-    //-- Toolbar
+    /// Toolbar
     header: ToolBar {
         height:         ScreenTools.toolbarHeight
         visible:        !QGroundControl.videoManager.fullScreen
@@ -325,7 +335,7 @@ ApplicationWindow {
     }
 
     //-------------------------------------------------------------------------
-    //-- Fly View
+    /// Fly View
     FlightDisplayView {
         id:             flightView
         anchors.fill:   parent
@@ -339,7 +349,7 @@ ApplicationWindow {
     }
 
     //-------------------------------------------------------------------------
-    //-- Plan View
+    /// Plan View
     Loader {
         id:             planViewLoader
         anchors.fill:   parent
@@ -348,7 +358,7 @@ ApplicationWindow {
     }
 
     //-------------------------------------------------------------------------
-    //-- Settings
+    /// Settings
     Loader {
         id:             settingsWindow
         anchors.fill:   parent
@@ -357,7 +367,7 @@ ApplicationWindow {
     }
 
     //-------------------------------------------------------------------------
-    //-- Setup
+    /// Setup
     Loader {
         id:             setupWindow
         anchors.fill:   parent
@@ -366,7 +376,7 @@ ApplicationWindow {
     }
 
     //-------------------------------------------------------------------------
-    //-- Analyze
+    /// Analyze
     Loader {
         id:             analyzeWindow
         anchors.fill:   parent
@@ -375,7 +385,7 @@ ApplicationWindow {
     }
 
     //-------------------------------------------------------------------------
-    //-- Loader helper for any child, no matter how deep, to display elements
+    //   @brief Loader helper for any child, no matter how deep, to display elements
     //   on top of the main window.
     //   This is DEPRECATED. Use Popup instead.
     Loader {

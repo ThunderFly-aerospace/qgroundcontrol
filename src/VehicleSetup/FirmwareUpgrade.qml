@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -383,8 +383,7 @@ SetupPage {
                                 anchors.right:  parent.right
                                 visible:        !px4Flow && apmFlightStack.checked && !controller.downloadingFirmwareList && controller.apmFirmwareNames.length !== 0
                                 model:          controller.apmFirmwareNames
-
-                                onModelChanged: console.log("model", model)
+                                onModelChanged: currentIndex = controller.apmFirmwareNamesBestIndex
                             }
 
                             QGCLabel {

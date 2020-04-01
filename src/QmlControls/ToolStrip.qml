@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -24,12 +24,16 @@ Rectangle {
 
     property alias  model:              repeater.model
     property real   maxHeight           ///< Maximum height for control, determines whether text is hidden to make control shorter
+    property alias  title:              titleLabel.text
 
     property AbstractButton lastClickedButton: null
 
     function simulateClick(buttonIndex) {
-        toolStripColumn.children[buttonIndex].checked = true
-        toolStripColumn.children[buttonIndex].clicked()
+        buttonIndex = buttonIndex + 1 // skip over title
+        if (!toolStripColumn.children[buttonIndex].checked) {
+            toolStripColumn.children[buttonIndex].checked = true
+            toolStripColumn.children[buttonIndex].clicked()
+        }
     }
 
     // Ensure we don't get narrower than content
@@ -70,6 +74,15 @@ Rectangle {
             anchors.left:   parent.left
             anchors.right:  parent.right
             spacing:        ScreenTools.defaultFontPixelWidth * 0.25
+
+            QGCLabel {
+                id:                     titleLabel
+                anchors.left:           parent.left
+                anchors.right:          parent.right
+                horizontalAlignment:    Text.AlignHCenter
+                font.pointSize:         ScreenTools.smallFontPointSize
+                visible:                title != ""
+            }
 
             Repeater {
                 id: repeater

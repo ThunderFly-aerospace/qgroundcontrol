@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -20,15 +20,16 @@
 
 Q_DECLARE_LOGGING_CATEGORY(StructureScanComplexItemLog)
 
+class PlanMasterController;
+
 class StructureScanComplexItem : public ComplexMissionItem
 {
     Q_OBJECT
 
 public:
-    /// @param vehicle Vehicle which this is being contructed for
     /// @param flyView true: Created for use in the Fly View, false: Created for use in the Plan View
     /// @param kmlOrSHPFile Polygon comes from this file, empty for default polygon
-    StructureScanComplexItem(Vehicle* vehicle, bool flyView, const QString& kmlOrSHPFile, QObject* parent);
+    StructureScanComplexItem(PlanMasterController* masterController, bool flyView, const QString& kmlOrSHPFile, QObject* parent);
 
     Q_PROPERTY(CameraCalc*      cameraCalc                  READ cameraCalc                                                 CONSTANT)
     Q_PROPERTY(Fact*            entranceAlt                 READ entranceAlt                                                CONSTANT)
@@ -116,17 +117,18 @@ signals:
 
 private slots:
     void _setDirty(void);
-    void _polygonDirtyChanged       (bool dirty);
-    void _flightPathChanged         (void);
-    void _clearInternal             (void);
-    void _updateCoordinateAltitudes (void);
-    void _rebuildFlightPolygon      (void);
-    void _recalcCameraShots         (void);
-    void _recalcLayerInfo           (void);
-    void _updateLastSequenceNumber  (void);
-    void _updateGimbalPitch         (void);
-    void _signalTopBottomAltChanged (void);
-    void _recalcScanDistance        (void);
+    void _polygonDirtyChanged           (bool dirty);
+    void _flightPathChanged             (void);
+    void _clearInternal                 (void);
+    void _updateCoordinateAltitudes     (void);
+    void _rebuildFlightPolygon          (void);
+    void _recalcCameraShots             (void);
+    void _recalcLayerInfo               (void);
+    void _updateLastSequenceNumber      (void);
+    void _updateGimbalPitch             (void);
+    void _signalTopBottomAltChanged     (void);
+    void _recalcScanDistance            (void);
+    void _updateWizardMode              (void);
 
 private:
     void _setCameraShots(int cameraShots);

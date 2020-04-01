@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -32,6 +32,7 @@ public:
     Q_PROPERTY(bool                 interactive READ interactive    WRITE setInteractive    NOTIFY interactiveChanged)
     Q_PROPERTY(bool                 isValid     READ isValid                                NOTIFY isValidChanged)
     Q_PROPERTY(bool                 empty       READ empty                                  NOTIFY isEmptyChanged)
+    Q_PROPERTY(bool                 traceMode   READ traceMode      WRITE setTraceMode      NOTIFY traceModeChanged)
 
     Q_INVOKABLE void clear(void);
     Q_INVOKABLE void appendVertex(const QGeoCoordinate& coordinate);
@@ -88,6 +89,7 @@ public:
     QVariantList    path        (void) const { return _polylinePath; }
     bool            isValid     (void) const { return _polylineModel.count() >= 2; }
     bool            empty       (void) const { return _polylineModel.count() == 0; }
+    bool            traceMode   (void) const { return _traceMode; }
 
     QmlObjectListModel* qmlPathModel(void) { return &_polylineModel; }
     QmlObjectListModel& pathModel   (void) { return _polylineModel; }
@@ -95,6 +97,7 @@ public:
     void setPath        (const QList<QGeoCoordinate>& path);
     void setPath        (const QVariantList& path);
     void setInteractive (bool interactive);
+    void setTraceMode   (bool traceMode);
 
     static const char* jsonPolylineKey;
 
@@ -106,6 +109,7 @@ signals:
     void interactiveChanged (bool interactive);
     void isValidChanged     (void);
     void isEmptyChanged     (void);
+    void traceModeChanged   (bool traceMode);
 
 private slots:
     void _polylineModelCountChanged(int count);
@@ -123,4 +127,5 @@ private:
     bool                _dirty;
     bool                _interactive;
     bool                _resetActive;
+    bool                _traceMode = false;
 };

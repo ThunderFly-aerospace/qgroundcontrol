@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2019 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -138,7 +138,7 @@ static const char kJniClassName[] {"org/mavlink/qgroundcontrol/QGCActivity"};
 void setNativeMethods(void)
 {
     JNINativeMethod javaMethods[] {
-        {"nativeInit", "(Landroid/content/Context;)V", reinterpret_cast<void *>(gst_android_init)}
+        {"nativeInit", "()V", reinterpret_cast<void *>(gst_android_init)}
     };
 
     QAndroidJniEnvironment jniEnv;
@@ -176,12 +176,8 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved)
     if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
         return -1;
     }
-    setNativeMethods();
 
-    QAndroidJniObject resultL = QAndroidJniObject::callStaticObjectMethod(
-        kJniClassName,
-        "jniOnLoad",
-        "();");
+    setNativeMethods();
 
 #if defined(QGC_GST_STREAMING)
     // Tell the androidmedia plugin about the Java VM
@@ -191,7 +187,9 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved)
  #if !defined(NO_SERIAL_LINK)
     QSerialPort::setNativeMethods();
  #endif
+
     JoystickAndroid::setNativeMethods();
+
 #if defined(QGC_ENABLE_PAIRING)
     PairingManager::setNativeMethods();
 #endif

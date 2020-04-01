@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -49,7 +49,8 @@ Item {
     property var    _rallyPointController:          _planController.rallyPointController
     property bool   _isPipVisible:                  QGroundControl.videoManager.hasVideo ? QGroundControl.loadBoolGlobalSetting(_PIPVisibleKey, true) : false
     property bool   _useChecklist:                  QGroundControl.settingsManager.appSettings.useChecklist.rawValue && QGroundControl.corePlugin.options.preFlightChecklistUrl.toString().length
-    property real   _savedZoomLevel:                0
+    property bool   _enforceChecklist:              _useChecklist && QGroundControl.settingsManager.appSettings.enforceChecklist.rawValue
+    property bool   _checklistComplete:             activeVehicle && (activeVehicle.checkListState === Vehicle.CheckListPassed)
     property real   _margins:                       ScreenTools.defaultFontPixelWidth / 2
     property real   _pipSize:                       mainWindow.width * 0.2
     property alias  _guidedController:              guidedActionsController
@@ -69,31 +70,30 @@ Item {
     readonly property string    _mainIsMapKey:          "MainFlyWindowIsMap"
     readonly property string    _PIPVisibleKey:         "IsPIPVisible"
 
+    Timer {
+        id:             checklistPopupTimer
+        interval:       1000
+        repeat:         false
+        onTriggered: {
+            if (visible && !_checklistComplete) {
+                checklistDropPanel.open()
+            }
+            else {
+                checklistDropPanel.close()
+            }
+        }
+    }
+
     function setStates() {
         QGroundControl.saveBoolGlobalSetting(_mainIsMapKey, mainIsMap)
         if(mainIsMap) {
             //-- Adjust Margins
             _flightMapContainer.state   = "fullMode"
             _flightVideo.state          = "pipMode"
-            //-- Save/Restore Map Zoom Level
-            if(_savedZoomLevel != 0) {
-                if(mainWindow.flightDisplayMap) {
-                    mainWindow.flightDisplayMap.zoomLevel = _savedZoomLevel
-                }
-            } else {
-                if(mainWindow.flightDisplayMap) {
-                    _savedZoomLevel = mainWindow.flightDisplayMap.zoomLevel
-                }
-            }
         } else {
             //-- Adjust Margins
             _flightMapContainer.state   = "pipMode"
             _flightVideo.state          = "fullMode"
-            //-- Set Map Zoom Level
-            if(mainWindow.flightDisplayMap) {
-                _savedZoomLevel = mainWindow.flightDisplayMap.zoomLevel
-                mainWindow.flightDisplayMap.zoomLevel = _savedZoomLevel - 3
-            }
         }
     }
 
@@ -114,6 +114,12 @@ Item {
             }
         }
         return true;
+    }
+
+    function showPreflightChecklistIfNeeded () {
+        if (activeVehicle && !_checklistComplete && _enforceChecklist) {
+            checklistPopupTimer.restart()
+        }
     }
 
     Connections {
@@ -335,6 +341,7 @@ Item {
                 scaleState:                 (mainIsMap && flyViewOverlay.item) ? (flyViewOverlay.item.scaleState ? flyViewOverlay.item.scaleState : "bottomMode") : "bottomMode"
                 Component.onCompleted: {
                     mainWindow.flightDisplayMap = _fMap
+                    _fMap.adjustMapSize()
                 }
             }
         }
@@ -367,11 +374,11 @@ Item {
                     name:   "pipMode"
                     PropertyChanges {
                         target:             _flightVideo
-                        anchors.margins:    _toolsMargin
+                        anchors.margins:    ScreenTools.defaultFontPixelHeight
                     }
                     PropertyChanges {
-                        target: _flightVideoPipControl
-                        inPopup: false
+                        target:             _flightVideoPipControl
+                        inPopup:            false
                     }
                 },
                 State {
@@ -381,8 +388,8 @@ Item {
                         anchors.margins:    0
                     }
                     PropertyChanges {
-                        target:     _flightVideoPipControl
-                        inPopup:    false
+                        target:             _flightVideoPipControl
+                        inPopup:            false
                     }
                 },
                 State {
@@ -390,25 +397,25 @@ Item {
                     StateChangeScript {
                         script: {
                             // Stop video, restart it again with Timer
-                            // Avoiding crashs if ParentChange is not yet done
+                            // Avoiding crashes if ParentChange is not yet done
                             QGroundControl.videoManager.stopVideo()
                             videoPopUpTimer.running = true
                         }
                     }
                     PropertyChanges {
-                        target: _flightVideoPipControl
-                        inPopup: true
+                        target:             _flightVideoPipControl
+                        inPopup:            true
                     }
                 },
                 State {
                     name: "popup-finished"
                     ParentChange {
-                        target: _flightVideo
-                        parent: videoItem
-                        x:      0
-                        y:      0
-                        width:  videoItem.width
-                        height: videoItem.height
+                        target:             _flightVideo
+                        parent:             videoItem
+                        x:                  0
+                        y:                  0
+                        width:              videoItem.width
+                        height:             videoItem.height
                     }
                 },
                 State {
@@ -420,12 +427,12 @@ Item {
                         }
                     }
                     ParentChange {
-                        target: _flightVideo
-                        parent: _mapAndVideo
+                        target:             _flightVideo
+                        parent:             _mapAndVideo
                     }
                     PropertyChanges {
-                        target: _flightVideoPipControl
-                        inPopup: false
+                        target:             _flightVideoPipControl
+                        inPopup:             false
                     }
                 }
             ]
@@ -459,6 +466,7 @@ Item {
             onActivated: {
                 mainIsMap = !mainIsMap
                 setStates()
+                _fMap.adjustMapSize()
             }
             onHideIt: {
                 setPipVisibility(!state)
@@ -563,6 +571,7 @@ Item {
             anchors.top:        parent.top
             z:                  _mapAndVideo.z + 4
             maxHeight:          parent.height - toolStrip.y + (_flightVideo.visible ? (_flightVideo.y - parent.height) : 0)
+            title:              qsTr("Fly")
 
             property bool _anyActionAvailable: _guidedController.showStartMission || _guidedController.showResumeMission || _guidedController.showChangeAlt || _guidedController.showLandAbort
             property var _actionModel: [
@@ -593,12 +602,6 @@ Item {
             ]
 
             model: [
-                /*{
-                    name:               "Plan",
-                    iconSource:         "/qmlimages/Plan.svg",
-                    buttonVisible:      true,
-                    buttonEnabled:      true,
-                },*/
                 {
                     name:               "Checklist",
                     iconSource:         "/qmlimages/check.svg",
@@ -643,13 +646,10 @@ Item {
             ]
 
             onClicked: {
-                guidedActionsController.closeAll()
-                /*if(index === 0) {
-                    mainWindow.showPlanView()
-                } else*/
                 if(index === 0) {
                     checklistDropPanel.open()
                 } else {
+                    guidedActionsController.closeAll()
                     var action = model[index].action
                     if (action === -1) {
                         guidedActionList.model   = _actionModel
@@ -778,21 +778,34 @@ Item {
     //-- Checklist GUI
     Popup {
         id:             checklistDropPanel
-        x:              Math.round((mainWindow.width  - width)  * 0.5)
-        y:              Math.round((mainWindow.height - height) * 0.5)
+        x:              toolStrip.x + toolStrip.width + (ScreenTools.defaultFontPixelWidth * 2)
+        y:              toolStrip.y
         height:         checkList.height
         width:          checkList.width
         modal:          true
         focus:          true
         closePolicy:    Popup.CloseOnEscape | Popup.CloseOnPressOutside
         background: Rectangle {
-            anchors.fill:  parent
-            color:      Qt.rgba(0,0,0,0)
-            clip:       true
+            anchors.fill:   parent
+            color:          Qt.rgba(0,0,0,0)
+            clip:           true
         }
+
         Loader {
             id:         checkList
             anchors.centerIn: parent
+        }
+
+        property alias checkListItem: checkList.item
+
+        Connections {
+            target: checkList.item
+            onAllChecksPassedChanged: {
+                if (target.allChecksPassed)
+                {
+                    checklistPopupTimer.restart()
+                }
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -18,13 +18,14 @@
 Q_DECLARE_LOGGING_CATEGORY(FixedWingLandingComplexItemLog)
 
 class FWLandingPatternTest;
+class PlanMasterController;
 
 class FixedWingLandingComplexItem : public ComplexMissionItem
 {
     Q_OBJECT
 
 public:
-    FixedWingLandingComplexItem(Vehicle* vehicle, bool flyView, QObject* parent);
+    FixedWingLandingComplexItem(PlanMasterController* masterController, bool flyView, QObject* parent);
 
     Q_PROPERTY(Fact*            loiterAltitude          READ    loiterAltitude                                              CONSTANT)
     Q_PROPERTY(Fact*            loiterRadius            READ    loiterRadius                                                CONSTANT)
@@ -41,7 +42,8 @@ public:
     Q_PROPERTY(QGeoCoordinate   loiterTangentCoordinate READ    loiterTangentCoordinate                                     NOTIFY loiterTangentCoordinateChanged)
     Q_PROPERTY(QGeoCoordinate   landingCoordinate       READ    landingCoordinate           WRITE setLandingCoordinate      NOTIFY landingCoordinateChanged)
     Q_PROPERTY(bool             landingCoordSet         MEMBER _landingCoordSet                                             NOTIFY landingCoordSetChanged)
-    Q_PROPERTY(bool             loiterDragAngleOnly     READ    loiterDragAngleOnly         WRITE setLoiterDragAngleOnly    NOTIFY loiterDragAngleOnlyChanged)
+
+    Q_INVOKABLE void moveLandingPosition(const QGeoCoordinate& coordinate); // Maintains the current landing distance and heading
 
     Fact*           loiterAltitude          (void) { return &_loiterAltitudeFact; }
     Fact*           loiterRadius            (void) { return &_loiterRadiusFact; }
@@ -55,14 +57,12 @@ public:
     QGeoCoordinate  landingCoordinate       (void) const { return _landingCoordinate; }
     QGeoCoordinate  loiterCoordinate        (void) const { return _loiterCoordinate; }
     QGeoCoordinate  loiterTangentCoordinate (void) const { return _loiterTangentCoordinate; }
-    bool            loiterDragAngleOnly     (void) const { return _loiterDragAngleOnly; }
 
     void setLandingCoordinate       (const QGeoCoordinate& coordinate);
     void setLoiterCoordinate        (const QGeoCoordinate& coordinate);
-    void setLoiterDragAngleOnly     (bool loiterDragAngleOnly);
 
     /// Scans the loaded items for a landing pattern complex item
-    static bool scanForItem(QmlObjectListModel* visualItems, bool flyView, Vehicle* vehicle);
+    static bool scanForItem(QmlObjectListModel* visualItems, bool flyView, PlanMasterController* masterController);
 
     static MissionItem* createDoLandStartItem   (int seqNum, QObject* parent);
     static MissionItem* createLoiterToAltItem   (int seqNum, bool altRel, double loiterRaidus, double lat, double lon, double alt, QObject* parent);
@@ -125,7 +125,6 @@ signals:
     void loiterClockwiseChanged         (bool loiterClockwise);
     void altitudesAreRelativeChanged    (bool altitudesAreRelative);
     void valueSetIsDistanceChanged      (bool valueSetIsDistance);
-    void loiterDragAngleOnlyChanged     (bool loiterDragAngleOnly);
 
 private slots:
     void    _recalcFromHeadingAndDistanceChange     (void);
@@ -150,7 +149,6 @@ private:
     QGeoCoordinate  _landingCoordinate;
     bool            _landingCoordSet;
     bool            _ignoreRecalcSignals;
-    bool            _loiterDragAngleOnly;
 
     QMap<QString, FactMetaData*> _metaDataMap;
 

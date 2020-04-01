@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -12,7 +12,7 @@
 #include "JsonHelper.h"
 #include "QGCQGeoCoordinate.h"
 #include "QGCApplication.h"
-#include "KMLFileHelper.h"
+#include "KMLHelper.h"
 
 #include <QGeoRectangle>
 #include <QDebug>
@@ -352,7 +352,7 @@ bool QGCMapPolyline::loadKMLFile(const QString& kmlFile)
 
     QString errorString;
     QList<QGeoCoordinate> rgCoords;
-    if (!KMLFileHelper::loadPolylineFromFile(kmlFile, rgCoords, errorString)) {
+    if (!KMLHelper::loadPolylineFromFile(kmlFile, rgCoords, errorString)) {
         qgcApp()->showMessage(errorString);
         return false;
     }
@@ -429,5 +429,13 @@ void QGCMapPolyline::_endResetIfNotActive(void)
 {
     if (!_resetActive) {
         endReset();
+    }
+}
+
+void QGCMapPolyline::setTraceMode(bool traceMode)
+{
+    if (traceMode != _traceMode) {
+        _traceMode = traceMode;
+        emit traceModeChanged(traceMode);
     }
 }

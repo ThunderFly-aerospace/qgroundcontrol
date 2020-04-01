@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -40,7 +40,7 @@ Item {
         id:             noVideo
         anchors.fill:   parent
         color:          Qt.rgba(0,0,0,0.75)
-        visible:        !(_videoReceiver && _videoReceiver.videoRunning)
+        visible:        !(_videoReceiver && _videoReceiver.decoding)
         QGCLabel {
             text:               QGroundControl.settingsManager.videoSettings.streamEnabled.rawValue ? qsTr("WAITING FOR VIDEO") : qsTr("VIDEO DISABLED")
             font.family:        ScreenTools.demiboldFontFamily
@@ -58,7 +58,7 @@ Item {
     Rectangle {
         anchors.fill:   parent
         color:          "black"
-        visible:        _videoReceiver && _videoReceiver.videoRunning
+        visible:        _videoReceiver && _videoReceiver.decoding
         function getWidth() {
             //-- Fit Width or Stretch
             if(_fitMode === 0 || _fitMode === 2) {
@@ -79,14 +79,14 @@ Item {
             id: videoBackgroundComponent
             QGCVideoBackground {
                 id:             videoContent
+                objectName:     "videoContent"
                 receiver:       _videoReceiver
-                display:        _videoReceiver && _videoReceiver.videoSurface
 
                 Connections {
                     target:         _videoReceiver
                     onImageFileChanged: {
                         videoContent.grabToImage(function(result) {
-                            if (!result.saveToFile(_videoReceiver.imageFile)) {
+                            if (!result.saveToFile(QGroundControl.videoManager.imageFile)) {
                                 console.error('Error capturing video frame');
                             }
                         });
@@ -125,13 +125,13 @@ Item {
         Loader {
             // GStreamer is causing crashes on Lenovo laptop OpenGL Intel drivers. In order to workaround this
             // we don't load a QGCVideoBackground object when video is disabled. This prevents any video rendering
-            // code from running. Setting QGCVideoBackground.receiver/display = null does not work to prevent any
+            // code from running. Setting QGCVideoBackground.receiver = null does not work to prevent any
             // video OpenGL from being generated. Hence the Loader to completely remove it.
             height:             parent.getHeight()
             width:              parent.getWidth()
             anchors.centerIn:   parent
-            visible:            _videoReceiver && _videoReceiver.videoRunning
-            sourceComponent:    videoDisabled ? null : videoBackgroundComponent
+            visible:            _videoReceiver && _videoReceiver.decoding
+            sourceComponent:    videoBackgroundComponent
 
             property bool videoDisabled: QGroundControl.settingsManager.videoSettings.videoSource.rawValue === QGroundControl.settingsManager.videoSettings.disabledVideoSource
         }
@@ -169,9 +169,9 @@ Item {
             }
             QGCVideoBackground {
                 id:             thermalVideo
+                objectName:     "thermalVideo"
                 anchors.fill:   parent
                 receiver:       QGroundControl.videoManager.thermalVideoReceiver
-                display:        QGroundControl.videoManager.thermalVideoReceiver ? QGroundControl.videoManager.thermalVideoReceiver.videoSurface : null
                 opacity:        _camera ? (_camera.thermalMode === QGCCameraControl.THERMAL_BLEND ? _camera.thermalOpacity / 100 : 1.0) : 0
             }
         }

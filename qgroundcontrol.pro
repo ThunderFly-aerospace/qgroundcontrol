@@ -9,6 +9,10 @@
 
 QMAKE_PROJECT_DEPTH = 0 # undocumented qmake flag to force absolute paths in make files
 
+# These are disabled until proven correct
+DEFINES += QGC_GST_TAISYNC_DISABLED
+DEFINES += QGC_GST_MICROHARD_DISABLED
+
 exists($${OUT_PWD}/qgroundcontrol.pro) {
     error("You must use shadow build (e.g. mkdir build; cd build; qmake ../qgroundcontrol.pro).")
 }
@@ -187,18 +191,6 @@ contains (DEFINES, QGC_DISABLE_BLUETOOTH) {
     DEFINES += QGC_ENABLE_BLUETOOTH
 }
 
-# NFC
-contains (DEFINES, QGC_DISABLE_NFC) {
-    message("Skipping support for NFC (manual override from command line)")
-    DEFINES -= QGC_ENABLE_NFC
-} else:exists(user_config.pri):infile(user_config.pri, DEFINES, QGC_DISABLE_NFC) {
-    message("Skipping support for NFC (manual override from user_config.pri)")
-    DEFINES -= QGC_ENABLE_NFC
-} else:exists(user_config.pri):infile(user_config.pri, DEFINES, QGC_ENABLE_NFC) {
-    message("Including support for NFC (manual override from user_config.pri)")
-    DEFINES += QGC_ENABLE_NFC
-}
-
 # QTNFC
 contains (DEFINES, QGC_DISABLE_QTNFC) {
     message("Skipping support for QTNFC (manual override from command line)")
@@ -318,14 +310,11 @@ DEFINES+=QGC_DISABLE_PAIRING
 # Pairing
 contains (DEFINES, QGC_DISABLE_PAIRING) {
     message("Skipping support for Pairing")
-    DEFINES -= QGC_ENABLE_NFC
 } else:exists(user_config.pri):infile(user_config.pri, DEFINES, QGC_DISABLE_PAIRING) {
     message("Skipping support for Pairing (manual override from user_config.pri)")
-    DEFINES -= QGC_ENABLE_NFC
 } else:AndroidBuild:contains(QT_ARCH, arm64) {
     # Haven't figured out how to get 64 bit arm OpenSLL yet which pairing requires
     message("Skipping support for Pairing (Missing Android OpenSSL 64 bit support)")
-    DEFINES -= QGC_ENABLE_NFC
 } else {
     message("Enabling support for Pairing")
     DEFINES += QGC_ENABLE_PAIRING
@@ -502,6 +491,7 @@ DebugBuild { PX4FirmwarePlugin { PX4FirmwarePluginFactory { APMFirmwarePlugin { 
         src/MissionManager/StructureScanComplexItemTest.h \
         src/MissionManager/SurveyComplexItemTest.h \
         src/MissionManager/TransectStyleComplexItemTest.h \
+        src/MissionManager/TransectStyleComplexItemTestBase.h \
         src/MissionManager/VisualMissionItemTest.h \
         src/qgcunittest/GeoTest.h \
         src/qgcunittest/LinkManagerTest.h \
@@ -544,6 +534,7 @@ DebugBuild { PX4FirmwarePlugin { PX4FirmwarePluginFactory { APMFirmwarePlugin { 
         src/MissionManager/StructureScanComplexItemTest.cc \
         src/MissionManager/SurveyComplexItemTest.cc \
         src/MissionManager/TransectStyleComplexItemTest.cc \
+        src/MissionManager/TransectStyleComplexItemTestBase.cc \
         src/MissionManager/VisualMissionItemTest.cc \
         src/qgcunittest/GeoTest.cc \
         src/qgcunittest/LinkManagerTest.cc \
@@ -579,15 +570,14 @@ HEADERS += \
     src/Camera/QGCCameraManager.h \
     src/CmdLineOptParser.h \
     src/FirmwarePlugin/PX4/px4_custom_mode.h \
-    src/FlightDisplay/VideoManager.h \
     src/FlightMap/Widgets/ValuesWidgetController.h \
     src/FollowMe/FollowMe.h \
     src/Joystick/Joystick.h \
     src/Joystick/JoystickManager.h \
     src/JsonHelper.h \
-    src/KMLFileHelper.h \
+    src/KMLDomDocument.h \
+    src/KMLHelper.h \
     src/LogCompressor.h \
-    src/MG.h \
     src/MissionManager/CameraCalc.h \
     src/MissionManager/CameraSection.h \
     src/MissionManager/CameraSpec.h \
@@ -598,7 +588,7 @@ HEADERS += \
     src/MissionManager/FixedWingLandingComplexItem.h \
     src/MissionManager/GeoFenceController.h \
     src/MissionManager/GeoFenceManager.h \
-    src/MissionManager/KML.h \
+    src/MissionManager/KMLPlanDomDocument.h \
     src/MissionManager/MissionCommandList.h \
     src/MissionManager/MissionCommandTree.h \
     src/MissionManager/MissionCommandUIInfo.h \
@@ -682,6 +672,8 @@ HEADERS += \
     src/Vehicle/GPSRTKFactGroup.h \
     src/Vehicle/MAVLinkLogManager.h \
     src/Vehicle/MultiVehicleManager.h \
+    src/Vehicle/TerrainFactGroup.h \
+    src/Vehicle/TerrainProtocolHandler.h \
     src/Vehicle/TrajectoryPoints.h \
     src/Vehicle/Vehicle.h \
     src/Vehicle/VehicleObjectAvoidance.h \
@@ -691,7 +683,6 @@ HEADERS += \
     src/comm/LinkManager.h \
     src/comm/LogReplayLink.h \
     src/comm/MAVLinkProtocol.h \
-    src/comm/ProtocolInterface.h \
     src/comm/QGCMAVLink.h \
     src/comm/TCPLink.h \
     src/comm/UDPLink.h \
@@ -739,37 +730,6 @@ contains (DEFINES, QGC_ENABLE_PAIRING) {
     }
 }
 
-contains (DEFINES, QGC_ENABLE_PAIRING) {
-    contains(DEFINES, QGC_ENABLE_NFC) {
-        HEADERS += \
-            src/PairingManager/PairingNFC.h \
-            src/PairingManager/NfcLibrary/inc/Nfc.h \
-            src/PairingManager/NfcLibrary/inc/Nfc_settings.h \
-            src/PairingManager/NfcLibrary/NdefLibrary/inc/P2P_NDEF.h \
-            src/PairingManager/NfcLibrary/NdefLibrary/inc/RW_NDEF.h \
-            src/PairingManager/NfcLibrary/NdefLibrary/inc/RW_NDEF_T1T.h \
-            src/PairingManager/NfcLibrary/NdefLibrary/inc/RW_NDEF_T2T.h \
-            src/PairingManager/NfcLibrary/NdefLibrary/inc/RW_NDEF_T3T.h \
-            src/PairingManager/NfcLibrary/NdefLibrary/inc/RW_NDEF_T4T.h \
-            src/PairingManager/NfcLibrary/NdefLibrary/inc/T4T_NDEF_emu.h \
-            src/PairingManager/NfcLibrary/NxpNci/inc/NxpNci.h \
-            src/PairingManager/NfcTask/inc/ndef_helper.h \
-            src/PairingManager/TML/inc/framework_Allocator.h \
-            src/PairingManager/TML/inc/framework_Interface.h \
-            src/PairingManager/TML/inc/framework_Map.h \
-            src/PairingManager/TML/inc/framework_Timer.h \
-            src/PairingManager/TML/inc/lpcusbsio.h \
-            src/PairingManager/TML/inc/tml.h \
-            src/PairingManager/TML/inc/tool.h \
-            src/PairingManager/TML/inc/framework_Container.h \
-            src/PairingManager/TML/inc/framework_linux.h \
-            src/PairingManager/TML/inc/framework_Parcel.h \
-            src/PairingManager/TML/inc/hidapi.h \
-            src/PairingManager/TML/inc/lpcusbsio_i2c.h \
-            src/PairingManager/TML/inc/tml_hid.h
-    }
-}
-
 !NoSerialBuild {
 HEADERS += \
     src/comm/QGCSerialPortInfo.h \
@@ -792,9 +752,6 @@ HEADERS += \
     src/GPS/vehicle_gps_position.h \
     src/Joystick/JoystickSDL.h \
     src/RunGuard.h \
-    src/comm/QGCHilLink.h \
-    src/comm/QGCJSBSimLink.h \
-    src/comm/QGCXPlaneLink.h \
 }
 
 iOSBuild {
@@ -819,13 +776,13 @@ SOURCES += \
     src/Camera/QGCCameraIO.cc \
     src/Camera/QGCCameraManager.cc \
     src/CmdLineOptParser.cc \
-    src/FlightDisplay/VideoManager.cc \
     src/FlightMap/Widgets/ValuesWidgetController.cc \
     src/FollowMe/FollowMe.cc \
     src/Joystick/Joystick.cc \
     src/Joystick/JoystickManager.cc \
     src/JsonHelper.cc \
-    src/KMLFileHelper.cc \
+    src/KMLDomDocument.cc \
+    src/KMLHelper.cc \
     src/LogCompressor.cc \
     src/MissionManager/CameraCalc.cc \
     src/MissionManager/CameraSection.cc \
@@ -837,7 +794,7 @@ SOURCES += \
     src/MissionManager/FixedWingLandingComplexItem.cc \
     src/MissionManager/GeoFenceController.cc \
     src/MissionManager/GeoFenceManager.cc \
-    src/MissionManager/KML.cc \
+    src/MissionManager/KMLPlanDomDocument.cc \
     src/MissionManager/MissionCommandList.cc \
     src/MissionManager/MissionCommandTree.cc \
     src/MissionManager/MissionCommandUIInfo.cc \
@@ -918,6 +875,8 @@ SOURCES += \
     src/Vehicle/GPSRTKFactGroup.cc \
     src/Vehicle/MAVLinkLogManager.cc \
     src/Vehicle/MultiVehicleManager.cc \
+    src/Vehicle/TerrainFactGroup.cc \
+    src/Vehicle/TerrainProtocolHandler.cc \
     src/Vehicle/TrajectoryPoints.cc \
     src/Vehicle/Vehicle.cc \
     src/Vehicle/VehicleObjectAvoidance.cc \
@@ -968,36 +927,6 @@ contains (DEFINES, QGC_ENABLE_PAIRING) {
     }
 }
 
-contains (DEFINES, QGC_ENABLE_PAIRING) {
-    contains(DEFINES, QGC_ENABLE_NFC) {
-        SOURCES += \
-        src/PairingManager/PairingNFC.cc \
-        src/PairingManager/NfcLibrary/NxpNci/src/NxpNci.c \
-        src/PairingManager/NfcLibrary/NdefLibrary/src/RW_NDEF_T4T.c \
-        src/PairingManager/NfcLibrary/NdefLibrary/src/P2P_NDEF.c \
-        src/PairingManager/NfcLibrary/NdefLibrary/src/RW_NDEF_T3T.c \
-        src/PairingManager/NfcLibrary/NdefLibrary/src/RW_NDEF.c \
-        src/PairingManager/NfcLibrary/NdefLibrary/src/RW_NDEF_T1T.c \
-        src/PairingManager/NfcLibrary/NdefLibrary/src/RW_NDEF_T2T.c \
-        src/PairingManager/NfcLibrary/NdefLibrary/src/T4T_NDEF_emu.c \
-        src/PairingManager/TML/src/framework_Map.c \
-        src/PairingManager/TML/src/framework_log.c \
-        src/PairingManager/TML/src/framework_Parcel.c \
-        src/PairingManager/TML/src/framework_sem.c \
-        src/PairingManager/TML/src/framework_mutex.c \
-        src/PairingManager/TML/src/hid.c \
-        src/PairingManager/TML/src/framework_Allocator.c \
-        src/PairingManager/TML/src/tml_hid.c \
-        src/PairingManager/TML/src/framework_Container.c \
-        src/PairingManager/TML/src/framework_thread.c \
-        src/PairingManager/TML/src/framework_Timer.c \
-        src/PairingManager/TML/src/lpcusbsio.c \
-        src/PairingManager/TML/src/tml.c \
-        src/PairingManager/NfcTask/src/ndef_helper.c
-        LIBS += -lrt -ludev
-    }
-}
-
 !MobileBuild {
 SOURCES += \
     src/GPS/Drivers/src/gps_helper.cpp \
@@ -1010,8 +939,6 @@ SOURCES += \
     src/GPS/RTCM/RTCMMavlink.cc \
     src/Joystick/JoystickSDL.cc \
     src/RunGuard.cc \
-    src/comm/QGCJSBSimLink.cc \
-    src/comm/QGCXPlaneLink.cc \
 }
 
 #
@@ -1105,6 +1032,7 @@ APMFirmwarePlugin {
         src/AutoPilotPlugins/APM/APMSafetyComponent.h \
         src/AutoPilotPlugins/APM/APMSensorsComponent.h \
         src/AutoPilotPlugins/APM/APMSensorsComponentController.h \
+        src/AutoPilotPlugins/APM/APMSubMotorComponentController.h \
         src/AutoPilotPlugins/APM/APMTuningComponent.h \
         src/FirmwarePlugin/APM/APMFirmwarePlugin.h \
         src/FirmwarePlugin/APM/APMParameterMetaData.h \
@@ -1132,6 +1060,7 @@ APMFirmwarePlugin {
         src/AutoPilotPlugins/APM/APMSafetyComponent.cc \
         src/AutoPilotPlugins/APM/APMSensorsComponent.cc \
         src/AutoPilotPlugins/APM/APMSensorsComponentController.cc \
+        src/AutoPilotPlugins/APM/APMSubMotorComponentController.cc \
         src/AutoPilotPlugins/APM/APMTuningComponent.cc \
         src/FirmwarePlugin/APM/APMFirmwarePlugin.cc \
         src/FirmwarePlugin/APM/APMParameterMetaData.cc \
@@ -1240,48 +1169,58 @@ contains (DEFINES, QGC_ENABLE_MAVLINK_INSPECTOR) {
 
 #-------------------------------------------------------------------------------------
 # Taisync
-contains (DEFINES, QGC_GST_TAISYNC_ENABLED) {
-    INCLUDEPATH += \
-        src/Taisync
+contains (DEFINES, QGC_GST_TAISYNC_DISABLED) {
+    DEFINES -= QGC_GST_TAISYNC_ENABLED
+    message("Taisync disabled")
+} else {
+    contains (DEFINES, QGC_GST_TAISYNC_ENABLED) {
+        INCLUDEPATH += \
+            src/Taisync
 
-    HEADERS += \
-        src/Taisync/TaisyncManager.h \
-        src/Taisync/TaisyncHandler.h \
-        src/Taisync/TaisyncSettings.h \
-
-    SOURCES += \
-        src/Taisync/TaisyncManager.cc \
-        src/Taisync/TaisyncHandler.cc \
-        src/Taisync/TaisyncSettings.cc \
-
-    iOSBuild | AndroidBuild {
         HEADERS += \
-            src/Taisync/TaisyncTelemetry.h \
-            src/Taisync/TaisyncVideoReceiver.h \
+            src/Taisync/TaisyncManager.h \
+            src/Taisync/TaisyncHandler.h \
+            src/Taisync/TaisyncSettings.h \
 
         SOURCES += \
-            src/Taisync/TaisyncTelemetry.cc \
-            src/Taisync/TaisyncVideoReceiver.cc \
+            src/Taisync/TaisyncManager.cc \
+            src/Taisync/TaisyncHandler.cc \
+            src/Taisync/TaisyncSettings.cc \
+
+        iOSBuild | AndroidBuild {
+            HEADERS += \
+                src/Taisync/TaisyncTelemetry.h \
+                src/Taisync/TaisyncVideoReceiver.h \
+
+            SOURCES += \
+                src/Taisync/TaisyncTelemetry.cc \
+                src/Taisync/TaisyncVideoReceiver.cc \
+        }
     }
 }
 
 #-------------------------------------------------------------------------------------
 # Microhard
-contains (DEFINES, QGC_GST_MICROHARD_ENABLED) {
-    INCLUDEPATH += \
-        src/Microhard
+QGC_GST_MICROHARD_DISABLED
+contains (DEFINES, QGC_GST_MICROHARD_DISABLED) {
+    DEFINES -= QGC_GST_MICROHARD_ENABLED
+    message("Microhard disabled")
+} else {
+    contains (DEFINES, QGC_GST_MICROHARD_ENABLED) {
+        INCLUDEPATH += \
+            src/Microhard
 
-    HEADERS += \
-        src/Microhard/MicrohardManager.h \
-        src/Microhard/MicrohardHandler.h \
-        src/Microhard/MicrohardSettings.h \
+        HEADERS += \
+            src/Microhard/MicrohardManager.h \
+            src/Microhard/MicrohardHandler.h \
+            src/Microhard/MicrohardSettings.h \
 
-    SOURCES += \
-        src/Microhard/MicrohardManager.cc \
-        src/Microhard/MicrohardHandler.cc \
-        src/Microhard/MicrohardSettings.cc \
+        SOURCES += \
+            src/Microhard/MicrohardManager.cc \
+            src/Microhard/MicrohardHandler.cc \
+            src/Microhard/MicrohardSettings.cc \
+    }
 }
-
 #-------------------------------------------------------------------------------------
 # AirMap
 
@@ -1373,22 +1312,15 @@ contains (DEFINES, QGC_AIRMAP_ENABLED) {
 # Video Streaming
 
 INCLUDEPATH += \
-    src/VideoStreaming
+    src/VideoManager
 
 HEADERS += \
-    src/VideoStreaming/VideoItem.h \
-    src/VideoStreaming/VideoReceiver.h \
-    src/VideoStreaming/VideoStreaming.h \
-    src/VideoStreaming/VideoSurface.h \
-    src/VideoStreaming/VideoSurface_p.h \
-    src/VideoStreaming/SubtitleWriter.h \
+    src/VideoManager/SubtitleWriter.h \
+    src/VideoManager/VideoManager.h
 
 SOURCES += \
-    src/VideoStreaming/VideoItem.cc \
-    src/VideoStreaming/VideoReceiver.cc \
-    src/VideoStreaming/VideoStreaming.cc \
-    src/VideoStreaming/VideoSurface.cc \
-    src/VideoStreaming/SubtitleWriter.cc \
+    src/VideoManager/SubtitleWriter.cc \
+    src/VideoManager/VideoManager.cc
 
 contains (CONFIG, DISABLE_VIDEOSTREAMING) {
     message("Skipping support for video streaming (manual override from command line)")
@@ -1396,7 +1328,19 @@ contains (CONFIG, DISABLE_VIDEOSTREAMING) {
 } else:exists(user_config.pri):infile(user_config.pri, DEFINES, DISABLE_VIDEOSTREAMING) {
     message("Skipping support for video streaming (manual override from user_config.pri)")
 } else {
-    include(src/VideoStreaming/VideoStreaming.pri)
+    include(src/VideoReceiver/VideoReceiver.pri)
+}
+
+!VideoEnabled {
+    INCLUDEPATH += \
+        src/VideoReceiver
+
+    HEADERS += \
+        src/VideoManager/GLVideoItemStub.h \
+        src/VideoReceiver/VideoReceiver.h
+
+    SOURCES += \
+        src/VideoManager/GLVideoItemStub.cc
 }
 
 #-------------------------------------------------------------------------------------

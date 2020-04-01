@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -26,6 +26,7 @@
 #include <QStringListModel>
 #include <QRegularExpression>
 #include <QFontDatabase>
+#include <QQuickWindow>
 
 #ifdef QGC_ENABLE_BLUETOOTH
 #include <QBluetoothLocalDevice>
@@ -33,7 +34,9 @@
 
 #include <QDebug>
 
-#include "VideoStreaming.h"
+#if defined(QGC_GST_STREAMING)
+#include "GStreamer.h"
+#endif
 
 #include "QGC.h"
 #include "QGCApplication.h"
@@ -68,7 +71,6 @@
 #include "CoordinateVector.h"
 #include "PlanMasterController.h"
 #include "VideoManager.h"
-#include "VideoSurface.h"
 #include "VideoReceiver.h"
 #include "LogDownloadController.h"
 #if defined(QGC_ENABLE_MAVLINK_INSPECTOR)
@@ -127,6 +129,22 @@
 #endif
 
 #include "QGCMapEngine.h"
+
+class FinishVideoInitialization : public QRunnable
+{
+public:
+  FinishVideoInitialization(VideoManager* manager)
+      : _manager(manager)
+  {}
+
+  void run () {
+      _manager->_initVideo();
+  }
+
+private:
+  VideoManager* _manager;
+};
+
 
 QGCApplication* QGCApplication::_app = nullptr;
 
@@ -303,26 +321,16 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
 #endif
 
     // Gstreamer debug settings
-#if defined(__ios__) || defined(__android__)
-    // Initialize Video Streaming
-    initializeVideoStreaming(argc, argv, nullptr, nullptr);
-#else
-    QString savePath, gstDebugLevel;
-    if (settings.contains(AppSettings::savePathName)) {
-        savePath = settings.value(AppSettings::savePathName).toString();
-    }
-    if(savePath.isEmpty()) {
-        savePath = "/tmp";
-    }
-    savePath = savePath + "/Logs/gst";
-    if (!QDir(savePath).exists()) {
-        QDir().mkpath(savePath);
-    }
+    int gstDebugLevel = 0;
     if (settings.contains(AppSettings::gstDebugLevelName)) {
-        gstDebugLevel = "*:" + settings.value(AppSettings::gstDebugLevelName).toString();
+        gstDebugLevel = settings.value(AppSettings::gstDebugLevelName).toInt();
     }
-    // Initialize Video Streaming
-    initializeVideoStreaming(argc, argv, savePath.toUtf8().data(), gstDebugLevel.toUtf8().data());
+
+#if defined(QGC_GST_STREAMING)
+    // Initialize Video Receiver
+    GStreamer::initialize(argc, argv, gstDebugLevel);
+#else
+    Q_UNUSED(gstDebugLevel)
 #endif
 
     _toolbox = new QGCToolbox(this);
@@ -455,7 +463,6 @@ void QGCApplication::_shutdown()
     // Close out all Qml before we delete toolbox. This way we don't get all sorts of null reference complaints from Qml.
     delete _qmlAppEngine;
 
-    shutdownVideoStreaming();
     delete _toolbox;
 }
 
@@ -560,6 +567,13 @@ bool QGCApplication::_initForNormalAppBoot()
     QSettings settings;
 
     _qmlAppEngine = toolbox()->corePlugin()->createRootWindow(this);
+
+    QQuickWindow* rootWindow = (QQuickWindow*)qgcApp()->mainRootWindow();
+
+    if (rootWindow) {
+        rootWindow->scheduleRenderJob (new FinishVideoInitialization (toolbox()->videoManager()),
+                QQuickWindow::BeforeSynchronizingStage);
+    }
 
     // Safe to show popup error messages now that main window is created
     UASMessageHandler* msgHandler = qgcApp()->toolbox()->uasMessageHandler();

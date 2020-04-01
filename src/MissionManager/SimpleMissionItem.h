@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -24,9 +24,8 @@ class SimpleMissionItem : public VisualMissionItem
     Q_OBJECT
     
 public:
-    SimpleMissionItem(Vehicle* vehicle, bool flyView, QObject* parent);
-    SimpleMissionItem(Vehicle* vehicle, bool flyView, const MissionItem& missionItem, QObject* parent);
-    //SimpleMissionItem(const SimpleMissionItem& other, bool flyView, QObject* parent);
+    SimpleMissionItem(PlanMasterController* masterController, bool flyView, bool forLoad, QObject* parent);
+    SimpleMissionItem(PlanMasterController* masterController, bool flyView, const MissionItem& missionItem, QObject* parent);
 
     ~SimpleMissionItem();
 
@@ -38,7 +37,6 @@ public:
     Q_PROPERTY(QGroundControlQmlGlobal::AltitudeMode altitudeMode READ altitudeMode WRITE setAltitudeMode       NOTIFY altitudeModeChanged)
     Q_PROPERTY(Fact*            amslAltAboveTerrain     READ amslAltAboveTerrain                                CONSTANT)                           ///< Actual AMSL altitude for item if altitudeMode == AltitudeAboveTerrain
     Q_PROPERTY(int              command                 READ command                WRITE setCommand            NOTIFY commandChanged)
-    Q_PROPERTY(bool             supportsTerrainFrame    READ supportsTerrainFrame                               NOTIFY supportsTerrainFrameChanged)
 
     /// Optional sections
     Q_PROPERTY(QObject*         speedSection            READ speedSection                                       NOTIFY speedSectionChanged)
@@ -59,7 +57,7 @@ public:
     ///     @param scanIndex Index to start scanning from
     ///     @param vehicle Vehicle associated with this mission
     /// @return true: section found, scanIndex updated
-    bool scanForSections(QmlObjectListModel* visualItems, int scanIndex, Vehicle* vehicle);
+    bool scanForSections(QmlObjectListModel* visualItems, int scanIndex, PlanMasterController* masterController);
 
     // Property accesors
     
@@ -72,7 +70,6 @@ public:
     QGroundControlQmlGlobal::AltitudeMode altitudeMode(void) const { return _altitudeMode; }
     Fact*           altitude            (void) { return &_altitudeFact; }
     Fact*           amslAltAboveTerrain (void) { return &_amslAltAboveTerrainFact; }
-    bool            supportsTerrainFrame(void) const { return _vehicle->supportsTerrainFrame(); }
 
     CameraSection*  cameraSection       (void) { return _cameraSection; }
     SpeedSection*   speedSection        (void) { return _speedSection; }
@@ -103,6 +100,7 @@ public:
     bool            dirty                   (void) const override { return _dirty; }
     bool            isSimpleItem            (void) const final { return true; }
     bool            isStandaloneCoordinate  (void) const final;
+    bool            isLandCommand           (void) const final;
     bool            specifiesCoordinate     (void) const final;
     bool            specifiesAltitudeOnly   (void) const final;
     QString         commandDescription      (void) const final;
@@ -140,7 +138,6 @@ signals:
     void cameraSectionChanged       (QObject* cameraSection);
     void speedSectionChanged        (QObject* cameraSection);
     void altitudeModeChanged        (void);
-    void supportsTerrainFrameChanged(void);
 
 private slots:
     void _setDirty                          (void);
@@ -166,19 +163,19 @@ private:
     void _rebuildComboBoxFacts  (void);
 
     MissionItem     _missionItem;
-    bool            _rawEdit;
-    bool            _dirty;
-    bool            _ignoreDirtyChangeSignals;
+    bool            _rawEdit =                  false;
+    bool            _dirty =                    false;
+    bool            _ignoreDirtyChangeSignals = false;
     QGeoCoordinate  _mapCenterHint;
+    SpeedSection*   _speedSection =             nullptr;
+    CameraSection*  _cameraSection =             nullptr;
 
-    SpeedSection*   _speedSection;
-    CameraSection* _cameraSection;
-
-    MissionCommandTree* _commandTree;
+    MissionCommandTree* _commandTree = nullptr;
+    bool _syncingHeadingDegreesAndParam4 = false;   ///< true: already in a sync signal, prevents signal loop
 
     Fact                _supportedCommandFact;
 
-    QGroundControlQmlGlobal::AltitudeMode   _altitudeMode;
+    QGroundControlQmlGlobal::AltitudeMode   _altitudeMode = QGroundControlQmlGlobal::AltitudeModeRelative;
     Fact                                    _altitudeFact;
     Fact                                    _amslAltAboveTerrainFact;
 
@@ -200,8 +197,6 @@ private:
     FactMetaData    _param5MetaData;
     FactMetaData    _param6MetaData;
     FactMetaData    _param7MetaData;
-
-    bool _syncingHeadingDegreesAndParam4;   ///< true: already in a sync signal, prevents signal loop
 
     static const char* _jsonAltitudeModeKey;
     static const char* _jsonAltitudeKey;

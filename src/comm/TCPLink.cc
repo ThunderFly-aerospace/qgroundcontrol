@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -57,7 +57,7 @@ void TCPLink::_writeDebugBytes(const QByteArray data)
     for (int i=0, size = data.size(); i<size; i++)
     {
         unsigned char v = data[i];
-        bytes.append(QString().sprintf("%02x ", v));
+        bytes.append(QString::asprintf("%02x ", v));
         if (data[i] > 31 && data[i] < 127)
         {
             ascii.append(data[i]);

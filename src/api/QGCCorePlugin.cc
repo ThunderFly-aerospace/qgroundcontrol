@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -16,7 +16,10 @@
 #include "AppMessages.h"
 #include "QmlObjectListModel.h"
 #include "VideoManager.h"
+#if defined(QGC_GST_STREAMING)
+#include "GStreamer.h"
 #include "VideoReceiver.h"
+#endif
 #include "QGCLoggingCategory.h"
 #include "QGCCameraManager.h"
 
@@ -25,7 +28,7 @@
 
 /// @file
 ///     @brief Core Plugin Interface for QGroundControl - Default Implementation
-///     @author Gus Grubba <mavlink@grubba.com>
+///     @author Gus Grubba <gus@auterion.com>
 
 class QGCCorePlugin_p
 {
@@ -440,7 +443,23 @@ VideoManager* QGCCorePlugin::createVideoManager(QGCApplication *app, QGCToolbox 
 
 VideoReceiver* QGCCorePlugin::createVideoReceiver(QObject* parent)
 {
-    return new VideoReceiver(parent);
+#if defined(QGC_GST_STREAMING)
+    return GStreamer::createVideoReceiver(parent);
+#else
+    Q_UNUSED(parent)
+    return nullptr;
+#endif
+}
+
+void* QGCCorePlugin::createVideoSink(QObject* parent, QQuickItem* widget)
+{
+#if defined(QGC_GST_STREAMING)
+    return GStreamer::createVideoSink(parent, widget);
+#else
+    Q_UNUSED(parent)
+    Q_UNUSED(widget)
+    return nullptr;
+#endif
 }
 
 bool QGCCorePlugin::guidedActionsControllerLogging() const

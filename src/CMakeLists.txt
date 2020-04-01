@@ -3,7 +3,7 @@ include_directories(
 	.
 	${CMAKE_CURRENT_BINARY_DIR}
 	${Qt5Location_PRIVATE_INCLUDE_DIRS}
-	VideoStreaming
+	VideoManager
 )
 
 set(EXTRA_SRC)
@@ -106,7 +106,7 @@ add_library(qgc
 	TerrainTile.cc
 )
 
-set_source_files_properties(QGCApplication.cc PROPERTIES COMPILE_DEFINITIONS GIT_VERSION="${git_tag}")
+set_source_files_properties(QGCApplication.cc PROPERTIES COMPILE_DEFINITIONS GIT_VERSION="${GIT_VERSION}")
 
 add_subdirectory(ui)
 
@@ -136,7 +136,8 @@ add_subdirectory(Terrain)
 add_subdirectory(uas)
 add_subdirectory(Vehicle)
 add_subdirectory(VehicleSetup)
-add_subdirectory(VideoStreaming)
+add_subdirectory(VideoManager)
+add_subdirectory(VideoReceiver)
 add_subdirectory(ViewWidgets)
 
 target_link_libraries(qgc
@@ -157,7 +158,6 @@ target_link_libraries(qgc
 		comm
 		FactSystem
 		FirmwarePlugin
-		FlightDisplay
 		FlightMap
 		FollowMe
 		Geo
@@ -173,7 +173,7 @@ target_link_libraries(qgc
 		ui
 		Vehicle
 		VehicleSetup
-		VideoStreaming
+		VideoManager
 		ViewWidgets
 )
 

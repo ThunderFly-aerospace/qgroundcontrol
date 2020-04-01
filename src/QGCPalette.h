@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -19,6 +19,34 @@
         PaletteColorInfo_t colorInfo = { \
             { QColor(lightDisabled), QColor(lightEnabled) }, \
             { QColor(darkDisabled), QColor(darkEnabled) } \
+        }; \
+        qgcApp()->toolbox()->corePlugin()->paletteOverride(#name, colorInfo); \
+        _colorInfoMap[Light][ColorGroupEnabled][QStringLiteral(#name)] = colorInfo[Light][ColorGroupEnabled]; \
+        _colorInfoMap[Light][ColorGroupDisabled][QStringLiteral(#name)] = colorInfo[Light][ColorGroupDisabled]; \
+        _colorInfoMap[Dark][ColorGroupEnabled][QStringLiteral(#name)] = colorInfo[Dark][ColorGroupEnabled]; \
+        _colorInfoMap[Dark][ColorGroupDisabled][QStringLiteral(#name)] = colorInfo[Dark][ColorGroupDisabled]; \
+        _colors << #name; \
+    }
+
+#define DECLARE_QGC_NONTHEMED_COLOR(name, disabledColor, enabledColor) \
+    { \
+        PaletteColorInfo_t colorInfo = { \
+            { QColor(disabledColor), QColor(enabledColor) }, \
+            { QColor(disabledColor), QColor(enabledColor) } \
+        }; \
+        qgcApp()->toolbox()->corePlugin()->paletteOverride(#name, colorInfo); \
+        _colorInfoMap[Light][ColorGroupEnabled][QStringLiteral(#name)] = colorInfo[Light][ColorGroupEnabled]; \
+        _colorInfoMap[Light][ColorGroupDisabled][QStringLiteral(#name)] = colorInfo[Light][ColorGroupDisabled]; \
+        _colorInfoMap[Dark][ColorGroupEnabled][QStringLiteral(#name)] = colorInfo[Dark][ColorGroupEnabled]; \
+        _colorInfoMap[Dark][ColorGroupDisabled][QStringLiteral(#name)] = colorInfo[Dark][ColorGroupDisabled]; \
+        _colors << #name; \
+    }
+
+#define DECLARE_QGC_SINGLE_COLOR(name, color) \
+    { \
+        PaletteColorInfo_t colorInfo = { \
+            { QColor(color), QColor(color) }, \
+            { QColor(color), QColor(color) } \
         }; \
         qgcApp()->toolbox()->corePlugin()->paletteOverride(#name, colorInfo); \
         _colorInfoMap[Light][ColorGroupEnabled][QStringLiteral(#name)] = colorInfo[Light][ColorGroupEnabled]; \
@@ -103,6 +131,7 @@ public:
     DEFINE_QGC_COLOR(mapIndicatorChild,     setMapIndicatorChild)
     DEFINE_QGC_COLOR(mapWidgetBorderLight,  setMapWidgetBorderLight)
     DEFINE_QGC_COLOR(mapWidgetBorderDark,   setMapWidgetBorderDark)
+    DEFINE_QGC_COLOR(mapMissionTrajectory,  setMapMissionTrajectory)
     DEFINE_QGC_COLOR(brandingPurple,        setBrandingPurple)
     DEFINE_QGC_COLOR(brandingBlue,          setBrandingBlue)
     DEFINE_QGC_COLOR(colorGreen,            setColorGreen)
@@ -115,6 +144,10 @@ public:
     DEFINE_QGC_COLOR(alertText,             setAlertText)
     DEFINE_QGC_COLOR(missionItemEditor,     setMissionItemEditor)
     DEFINE_QGC_COLOR(hoverColor,            setHoverColor)
+    DEFINE_QGC_COLOR(statusFailedText,      setstatusFailedText)
+    DEFINE_QGC_COLOR(statusPassedText,      setstatusPassedText)
+    DEFINE_QGC_COLOR(statusPendingText,     setstatusPendingText)
+    DEFINE_QGC_COLOR(surveyPolygonInterior, setSurveyPolygonInterior)
 
      QGCPalette(QObject* parent = nullptr);
     ~QGCPalette();

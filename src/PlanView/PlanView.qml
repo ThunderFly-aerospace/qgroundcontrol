@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -49,7 +49,7 @@ Item {
     property bool   _addWaypointOnClick:                false
     property bool   _addROIOnClick:                     false
     property bool   _singleComplexItem:                 _missionController.complexMissionItemNames.length === 1
-    property int    _editingLayer:                      bar.currentIndex ? _layers[bar.currentIndex] : _layerMission
+    property int    _editingLayer:                      layerTabBar.currentIndex ? _layers[layerTabBar.currentIndex] : _layerMission
     property int    _toolStripBottom:                   toolStrip.height + toolStrip.y
     property var    _appSettings:                       QGroundControl.settingsManager.appSettings
     property var    _planViewSettings:                  QGroundControl.settingsManager.planViewSettings
@@ -105,8 +105,12 @@ Item {
     }
 
     onVisibleChanged: {
-        if (visible && !_planMasterController.containsItems) {
-            toolStrip.simulateClick(toolStrip.fileButtonIndex)
+        if(visible) {
+            editorMap.zoomLevel = QGroundControl.flightMapZoom
+            editorMap.center    = QGroundControl.flightMapPosition
+            if (!_planMasterController.containsItems) {
+                toolStrip.simulateClick(toolStrip.fileButtonIndex)
+            }
         }
     }
 
@@ -287,6 +291,17 @@ Item {
         _missionController.insertComplexMissionItem(complexItemName, mapCenter(), nextIndex, true /* makeCurrentItem */)
     }
 
+    function insertTakeItemAfterCurrent() {
+        var nextIndex = _missionController.currentPlanViewVIIndex + 1
+        _missionController.insertTakeoffItem(mapCenter(), nextIndex, true /* makeCurrentItem */)
+    }
+
+    function insertLandItemAfterCurrent() {
+        var nextIndex = _missionController.currentPlanViewVIIndex + 1
+        _missionController.insertLandItem(mapCenter(), nextIndex, true /* makeCurrentItem */)
+    }
+
+
     function selectNextNotReady() {
         var foundCurrent = false
         for (var i=0; i<_missionController.visualItems.count; i++) {
@@ -367,28 +382,28 @@ Item {
             allowVehicleLocationCenter: true
             planView:                   true
 
+            zoomLevel:                  QGroundControl.flightMapZoom
+            center:                     QGroundControl.flightMapPosition
+
             // This is the center rectangle of the map which is not obscured by tools
             property rect centerViewport:   Qt.rect(_leftToolWidth + _margin, _toolsMargin, editorMap.width - _leftToolWidth - _rightToolWidth - (_margin * 2), mapScale.y - _margin - _toolsMargin)
 
             property real _leftToolWidth:       toolStrip.x + toolStrip.width
             property real _rightToolWidth:      rightPanel.width + rightPanel.anchors.rightMargin
 
-            readonly property real animationDuration: 500
-
             // Initial map position duplicates Fly view position
             Component.onCompleted: editorMap.center = QGroundControl.flightMapPosition
 
-            Behavior on zoomLevel {
-                NumberAnimation {
-                    duration:       editorMap.animationDuration
-                    easing.type:    Easing.InOutQuad
-                }
-            }
-
             QGCMapPalette { id: mapPal; lightColors: editorMap.isSatelliteMap }
 
-            onZoomLevelChanged: updateAirspace(false)
-            onCenterChanged:    updateAirspace(false)
+            onZoomLevelChanged: {
+                QGroundControl.flightMapZoom = zoomLevel
+                updateAirspace(false)
+            }
+            onCenterChanged: {
+                QGroundControl.flightMapPosition = center
+                updateAirspace(false)
+            }
 
             MouseArea {
                 anchors.fill: parent
@@ -555,6 +570,7 @@ Item {
             anchors.top:        parent.top
             z:                  QGroundControl.zOrderWidgets
             maxHeight:          parent.height - toolStrip.y
+            title:              qsTr("Plan")
 
             //readonly property int flyButtonIndex:       0
             readonly property int fileButtonIndex:      0
@@ -601,8 +617,8 @@ Item {
                 {
                     name:               _missionController.isROIActive ? qsTr("Cancel ROI") : qsTr("ROI"),
                     iconSource:         "/qmlimages/MapAddMission.svg",
-                    buttonEnabled:      true,
-                    buttonVisible:      _isMissionLayer,
+                    buttonEnabled:      !_missionController.onlyInsertTakeoffValid,
+                    buttonVisible:      _isMissionLayer && _planMasterController.controllerVehicle.roiModeSupported,
                     toggle:             !_missionController.isROIActive
                 },
                 {
@@ -613,7 +629,7 @@ Item {
                     dropPanelComponent: _singleComplexItem ? undefined : patternDropPanel
                 },
                 {
-                    name:               _planMasterController.controllerVehicle.fixedWing ? qsTr("Land") : qsTr("Return"),
+                    name:               _planMasterController.controllerVehicle.multiRotor ? qsTr("Return") : qsTr("Land"),
                     iconSource:         "/res/rtl.svg",
                     buttonEnabled:      _missionController.isInsertLandValid,
                     buttonVisible:      _isMissionLayer
@@ -639,7 +655,7 @@ Item {
                     break*/
                 case takeoffButtonIndex:
                     allAddClickBoolsOff()
-                    _missionController.insertTakeoffItem(mapCenter(), _missionController.currentMissionIndex, true /* makeCurrentItem */)
+                    insertTakeItemAfterCurrent()
                     break
                 case waypointButtonIndex:
                     if (_addWaypointOnClick) {
@@ -671,7 +687,7 @@ Item {
                     break
                 case landButtonIndex:
                     allAddClickBoolsOff()
-                    _missionController.insertLandItem(mapCenter(), _missionController.currentMissionIndex, true /* makeCurrentItem */)
+                    insertLandItemAfterCurrent()
                     break
                 }
             }
@@ -688,7 +704,7 @@ Item {
             height:             parent.height
             width:              _rightPanelWidth
             color:              qgcPal.window
-            opacity:            planExpanded.visible ? 0.2 : 0
+            opacity:            layerTabBar.visible ? 0.2 : 0
             anchors.bottom:     parent.bottom
             anchors.right:      parent.right
             anchors.rightMargin: _toolsMargin
@@ -765,38 +781,21 @@ Item {
                 }
                 //-------------------------------------------------------
                 // Mission Controls (Expanded)
-                Rectangle {
-                    id:         planExpanded
+                QGCTabBar {
+                    id:         layerTabBar
                     width:      parent.width
-                    height:     (!planControlColapsed || !_airspaceEnabled) ? bar.height + ScreenTools.defaultFontPixelHeight : 0
-                    color:      qgcPal.missionItemEditor
-                    radius:     _radius
                     visible:    (!planControlColapsed || !_airspaceEnabled) && QGroundControl.corePlugin.options.enablePlanViewSelector
-                    Item {
-                        height:             bar.height
-                        anchors.left:       parent.left
-                        anchors.right:      parent.right
-                        anchors.margins:    ScreenTools.defaultFontPixelWidth
-                        anchors.verticalCenter: parent.verticalCenter
-                        QGCTabBar {
-                            id:             bar
-                            width:          parent.width
-                            anchors.centerIn: parent
-                            Component.onCompleted: {
-                                currentIndex = 0
-                            }
-                            QGCTabButton {
-                                text:       qsTr("Mission")
-                            }
-                            QGCTabButton {
-                                text:       qsTr("Fence")
-                                enabled:    _geoFenceController.supported
-                            }
-                            QGCTabButton {
-                                text:       qsTr("Rally")
-                                enabled:    _rallyPointController.supported
-                            }
-                        }
+                    Component.onCompleted: currentIndex = 0
+                    QGCTabButton {
+                        text:       qsTr("Mission")
+                    }
+                    QGCTabButton {
+                        text:       qsTr("Fence")
+                        enabled:    _geoFenceController.supported
+                    }
+                    QGCTabButton {
+                        text:       qsTr("Rally")
+                        enabled:    _rallyPointController.supported
                     }
                 }
             }
@@ -831,12 +830,11 @@ Item {
                         readOnly:       false
                         onClicked:      _missionController.setCurrentPlanViewSeqNum(object.sequenceNumber, false)
                         onRemove: {
-                            var removeIndex = index
-                            _missionController.removeMissionItem(removeIndex)
-                            if (removeIndex >= _missionController.visualItems.count) {
-                                removeIndex--
+                            var removeVIIndex = index
+                            _missionController.removeMissionItem(removeVIIndex)
+                            if (removeVIIndex >= _missionController.visualItems.count) {
+                                removeVIIndex--
                             }
-                            _missionController.setCurrentPlanViewSeqNum(removeIndex, true)
                         }
                         onSelectNextNotReadyItem:   selectNextNotReady()
                     }
