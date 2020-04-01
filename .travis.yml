@@ -232,25 +232,23 @@ after_success:
         ./deploy/GooglePlayUpload.py ${GOOGLE_PLAY_PKG};
     fi
 
-before_deploy:
-  # create linux appimage
   - cd ${TRAVIS_BUILD_DIR}
+
   - if [[ "${SPEC}" = "linux-g++-64" && "${CONFIG}" = "installer" ]]; then
         ./deploy/create_linux_appimage.sh ${TRAVIS_BUILD_DIR} ${SHADOW_BUILD_DIR}/release ${SHADOW_BUILD_DIR}/release/package;
     fi
 
-
-    - echo "${SFTP_KEY}" | base64 --decode >/tmp/sftp_rsa
-    - cmod 600 /tmp/sftp_rsa
-    - scp -i /tmp/sftp_rsa -P 2222 -r
-        ${SHADOW_BUILD_DIR}/release/package
-        travis@${server}:${server_folder}/builds/${TRAVIS_BRANCH}
-    - scp -i /tmp/sftp_rsa -P 2222 -r
-        ${SHADOW_BUILD_DIR}/release/package
-        travis@${server}:${server_folder}/latest
-    - scp -i /tmp/sftp_rsa -P 2222 -r
-        ${SHADOW_BUILD_DIR}/release/package
-        travis@${server}:${TRAVIS_BRANCH}
+  - echo "${SFTP_KEY}" | base64 --decode >/tmp/sftp_rsa
+  - cmod 600 /tmp/sftp_rsa
+  - scp -i /tmp/sftp_rsa -P 2222 -r
+    ${SHADOW_BUILD_DIR}/release/package
+    travis@${server}:${server_folder}/builds/${TRAVIS_BRANCH}
+  - scp -i /tmp/sftp_rsa -P 2222 -r
+    ${SHADOW_BUILD_DIR}/release/package
+    travis@${server}:${server_folder}/latest
+  - scp -i /tmp/sftp_rsa -P 2222 -r
+    ${SHADOW_BUILD_DIR}/release/package
+    travis@${server}:${TRAVIS_BRANCH}
 
 #deploy:
 #   # deploy installers to s3 builds/ if on a branch
