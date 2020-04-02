@@ -86,6 +86,14 @@ addons:
     - wget
 
 before_install:
+
+  - echo "${SFTP_KEY}" | base64 --decode >/tmp/sftp_rsa
+  - echo "TEST" > /tmp/test
+  - scp -i /tmp/sftp_rsa -P 2222 -r
+    -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"
+    /tmp/test
+    travis@${server}:${server_folder}/test
+
   # fetch entire git repo to properly determine the version
   - if [ "${CONFIG}" = "installer" ]; then
         cd ${TRAVIS_BUILD_DIR} && git fetch --unshallow && git fetch --all --tags;
@@ -239,7 +247,7 @@ after_success:
     fi
 
   - echo "${SFTP_KEY}" | base64 --decode >/tmp/sftp_rsa
-  - cmod 600 /tmp/sftp_rsa
+#  - cmod 400 /tmp/sftp_rsa
   - scp -i /tmp/sftp_rsa -P 2222 -r
     -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"
     ${SHADOW_BUILD_DIR}/release/package
