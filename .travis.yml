@@ -241,12 +241,15 @@ after_success:
   - echo "${SFTP_KEY}" | base64 --decode >/tmp/sftp_rsa
   - cmod 600 /tmp/sftp_rsa
   - scp -i /tmp/sftp_rsa -P 2222 -r
+    -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"
     ${SHADOW_BUILD_DIR}/release/package
     travis@${server}:${server_folder}/builds/${TRAVIS_BRANCH}
   - scp -i /tmp/sftp_rsa -P 2222 -r
+    -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"
     ${SHADOW_BUILD_DIR}/release/package
     travis@${server}:${server_folder}/latest
   - scp -i /tmp/sftp_rsa -P 2222 -r
+    -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"
     ${SHADOW_BUILD_DIR}/release/package
     travis@${server}:${TRAVIS_BRANCH}
 
