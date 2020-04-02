@@ -87,14 +87,6 @@ addons:
 
 before_install:
 
-  - echo "${SFTP_KEY}" | base64 --decode >~/sftp_rsa
-  - chmod 400 ~/sftp_rsa
-  - echo "TEST" > /tmp/test
-  - scp -i ~/sftp_rsa -P 2222 -r
-    -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"
-    /tmp/test
-    travis@${server}:${server_folder}/test
-
   # fetch entire git repo to properly determine the version
   - if [ "${CONFIG}" = "installer" ]; then
         cd ${TRAVIS_BUILD_DIR} && git fetch --unshallow && git fetch --all --tags;
@@ -247,20 +239,21 @@ after_success:
         ./deploy/create_linux_appimage.sh ${TRAVIS_BUILD_DIR} ${SHADOW_BUILD_DIR}/release ${SHADOW_BUILD_DIR}/release/package;
     fi
 
-  - echo "${SFTP_KEY}" | base64 --decode >/tmp/sftp_rsa
-#  - cmod 400 /tmp/sftp_rsa
-  - scp -i /tmp/sftp_rsa -P 2222 -r
+  - echo "${SFTP_KEY}" | base64 --decode >~/sftp_rsa
+  - chmod 400 ~/sftp_rsa
+  - scp -i ~/sftp_rsa -P 2222 -r
     -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"
     ${SHADOW_BUILD_DIR}/release/package
     travis@${server}:${server_folder}/builds/${TRAVIS_BRANCH}
-  - scp -i /tmp/sftp_rsa -P 2222 -r
+  - scp -i ~/sftp_rsa -P 2222 -r
     -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"
     ${SHADOW_BUILD_DIR}/release/package
     travis@${server}:${server_folder}/latest
-  - scp -i /tmp/sftp_rsa -P 2222 -r
+  - scp -i ~/sftp_rsa -P 2222 -r
     -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"
     ${SHADOW_BUILD_DIR}/release/package
     travis@${server}:${TRAVIS_BRANCH}
+  - rm ~/sftp_rsa
 
 #deploy:
 #   # deploy installers to s3 builds/ if on a branch
