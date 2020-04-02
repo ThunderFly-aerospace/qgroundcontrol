@@ -87,9 +87,10 @@ addons:
 
 before_install:
 
-  - echo "${SFTP_KEY}" | base64 --decode >/tmp/sftp_rsa
+  - echo "${SFTP_KEY}" | base64 --decode >~/sftp_rsa
+  - chmod 400 ~/sftp_rsa
   - echo "TEST" > /tmp/test
-  - scp -i /tmp/sftp_rsa -P 2222 -r
+  - scp -i ~/sftp_rsa -P 2222 -r
     -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no"
     /tmp/test
     travis@${server}:${server_folder}/test
