@@ -1,7 +1,6 @@
 # QGroundControl Ground Control Station - ThunderFly fork
 
-https://travis-ci.com/ThunderFly-aerospace/qgroundcontrol.svg?branch=master
-
+[![Build Status](https://travis-ci.com/ThunderFly-aerospace/qgroundcontrol.svg?branch=master)](https://travis-ci.com/ThunderFly-aerospace/qgroundcontrol)
 
 *QGroundControl* (QGC) is an intuitive and powerful ground control station (GCS) for UAVs.
 
