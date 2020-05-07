@@ -136,6 +136,12 @@
     "shortDescription": "Throttle %",
     "type":             "uint16",
     "units":            "%"
+},
+{
+    "name":             "RPM",
+    "shortDescription": "RPM speed",
+    "type":             "double",
+    "units":            "rpm"
 }
 ]
 }
