@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <QElapsedTimer>
 #include <QMap>
 #include <QLoggingCategory>
 #include <QGeoCoordinate>
@@ -192,6 +193,7 @@ private:
     void _handlePreFlightCalibration    (const mavlink_command_long_t& request);
     void _handleLogRequestList          (const mavlink_message_t& msg);
     void _handleLogRequestData          (const mavlink_message_t& msg);
+    void _handleParamMapRC              (const mavlink_message_t& msg);
     float _floatUnionForParam           (int componentId, const QString& paramName);
     void _setParamFloatUnionIntoMap     (int componentId, const QString& paramName, float paramFloat);
     void _sendHomePosition              (void);
@@ -229,7 +231,7 @@ private:
     uint32_t    _mavCustomMode;
     uint8_t     _mavState;
 
-    QTime       _runningTime;
+    QElapsedTimer _runningTime;
     int8_t      _batteryRemaining = 100;
 
     MAV_AUTOPILOT       _firmwareType;

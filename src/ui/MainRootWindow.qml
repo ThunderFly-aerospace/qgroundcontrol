@@ -20,6 +20,7 @@ import QGroundControl.Controls      1.0
 import QGroundControl.ScreenTools   1.0
 import QGroundControl.FlightDisplay 1.0
 import QGroundControl.FlightMap     1.0
+import QGroundControl.Specific      1.0
 
 /// @brief Native QML top level window
 /// All properties defined here are visible to all QML pages.
@@ -31,11 +32,18 @@ ApplicationWindow {
 
     Component.onCompleted: {
         //-- Full screen on mobile or tiny screens
-        if(ScreenTools.isMobile || Screen.height / ScreenTools.realPixelDensity < 120) {
+        if (ScreenTools.isMobile || Screen.height / ScreenTools.realPixelDensity < 120) {
             mainWindow.showFullScreen()
         } else {
             width   = ScreenTools.isMobile ? Screen.width  : Math.min(250 * Screen.pixelDensity, Screen.width)
             height  = ScreenTools.isMobile ? Screen.height : Math.min(150 * Screen.pixelDensity, Screen.height)
+        }
+
+        // Startup experience wizard and provide the source using QGCCorePlugin
+        if (QGroundControl.settingsManager.appSettings.firstTimeStart.value) {
+            startupPopup.open()
+        } else {
+            showPreFlightChecklistIfNeeded()
         }
     }
 
@@ -50,21 +58,20 @@ ApplicationWindow {
     //-- Global Scope Variables
 
     /// Current active Vehicle
-    property var                activeVehicle:              QGroundControl.multiVehicleManager.activeVehicle
+    property var                activeVehicle:                  QGroundControl.multiVehicleManager.activeVehicle
     /// Indicates communication with vehicle is list (no heartbeats)
-    property bool               communicationLost:          activeVehicle ? activeVehicle.connectionLost : false
-    property string             formatedMessage:            activeVehicle ? activeVehicle.formatedMessage : ""
+    property bool               communicationLost:              activeVehicle ? activeVehicle.connectionLost : false
+    property string             formatedMessage:                activeVehicle ? activeVehicle.formatedMessage : ""
     /// Indicates usable height between toolbar and footer
-    property real               availableHeight:            mainWindow.height - mainWindow.header.height - mainWindow.footer.height
+    property real               availableHeight:                mainWindow.height - mainWindow.header.height - mainWindow.footer.height
 
-    property var                currentPlanMissionItem:     planMasterControllerPlan ? planMasterControllerPlan.missionController.currentPlanViewItem : null
-    property var                planMasterControllerPlan:   null
-    property var                planMasterControllerView:   null
-    property var                flightDisplayMap:           null
+    property var                currentPlanMissionItem:         planMasterControllerPlanView ? planMasterControllerPlanView.missionController.currentPlanViewItem : null
+    property var                planMasterControllerPlanView:   null
+    property var                planMasterControllerFlyView:    null
 
-    readonly property string    navButtonWidth:             ScreenTools.defaultFontPixelWidth * 24
-    readonly property real      defaultTextHeight:          ScreenTools.defaultFontPixelHeight
-    readonly property real      defaultTextWidth:           ScreenTools.defaultFontPixelWidth
+    readonly property string    navButtonWidth:                 ScreenTools.defaultFontPixelWidth * 24
+    readonly property real      defaultTextHeight:              ScreenTools.defaultFontPixelHeight
+    readonly property real      defaultTextWidth:               ScreenTools.defaultFontPixelWidth
 
     /// Default color palette used throughout the UI
     QGCPalette { id: qgcPal; colorGroupEnabled: true }
@@ -72,10 +79,11 @@ ApplicationWindow {
     //-------------------------------------------------------------------------
     //-- Actions
 
-    signal armVehicle
-    signal disarmVehicle
-    signal vtolTransitionToFwdFlight
-    signal vtolTransitionToMRFlight
+    signal armVehicleRequest
+    signal disarmVehicleRequest
+    signal vtolTransitionToFwdFlightRequest
+    signal vtolTransitionToMRFlightRequest
+    signal showPreFlightChecklistIfNeeded
 
     //-------------------------------------------------------------------------
     //-- Global Scope Functions
@@ -114,9 +122,8 @@ ApplicationWindow {
 
     function showFlyView() {
         if (!flightView.visible) {
-            flightView.showPreflightChecklistIfNeeded()
+            mainWindow.showPreFlightChecklistIfNeeded()
         }
-
         viewSwitch(false)
         flightView.visible = true
     }
@@ -145,24 +152,23 @@ ApplicationWindow {
     //-- Global simple message dialog
 
     function showMessageDialog(title, text) {
-        if(simpleMessageDialog.visible) {
-            simpleMessageDialog.close()
+        var dialog = simpleMessageDialog.createObject(mainWindow, { title: title, text: text })
+        dialog.open()
+    }
+
+    Component {
+        id: simpleMessageDialog
+
+        MessageDialog {
+            standardButtons:    StandardButton.Ok
+            modality:           Qt.ApplicationModal
+            visible:            false
         }
-        simpleMessageDialog.title = title
-        simpleMessageDialog.text  = text
-        simpleMessageDialog.open()
     }
 
     /// Saves main window position and size
     MainWindowSavedState {
         window: mainWindow
-    }
-
-    MessageDialog {
-        id:                 simpleMessageDialog
-        standardButtons:    StandardButton.Ok
-        modality:           Qt.ApplicationModal
-        visible:            false
     }
 
     //-------------------------------------------------------------------------
@@ -223,6 +229,16 @@ ApplicationWindow {
         }
     }
 
+    function showPopupDialog(component, properties) {
+        var dialog = popupDialogContainerComponent.createObject(mainWindow, { dialogComponent: component, dialogProperties: properties })
+        dialog.open()
+    }
+
+    Component {
+        id: popupDialogContainerComponent
+        QGCPopupDialogContainer { }
+    }
+
     property bool _forceClose: false
 
     function finishCloseProcess() {
@@ -252,7 +268,7 @@ ApplicationWindow {
         visible:            false
         onYes:              pendingParameterWritesCloseDialog.check()
         function check() {
-            if (planMasterControllerPlan && planMasterControllerPlan.dirty) {
+            if (planMasterControllerPlanView && planMasterControllerPlanView.dirty) {
                 unsavedMissionCloseDialog.open()
             } else {
                 pendingParameterWritesCloseDialog.check()
@@ -336,16 +352,9 @@ ApplicationWindow {
 
     //-------------------------------------------------------------------------
     /// Fly View
-    FlightDisplayView {
+    FlyView {
         id:             flightView
         anchors.fill:   parent
-        //-----------------------------------------------------------------
-        //-- Loader helper for any child, no matter how deep, to display
-        //   elements on top of the fly (video) window.
-        Loader {
-            id: rootVideoLoader
-            anchors.centerIn: parent
-        }
     }
 
     //-------------------------------------------------------------------------
@@ -508,7 +517,7 @@ ApplicationWindow {
     property var    _messageQueue:      []
     property string _systemMessage:     ""
 
-    function showMessage(message) {
+    function showVehicleMessage(message) {
         vehicleMessageArea.close()
         if(systemMessageArea.visible || QGroundControl.videoManager.fullScreen) {
             _messageQueue.push(message)
@@ -677,4 +686,34 @@ ApplicationWindow {
         }
     }
 
+    //-- Startup PopUp wizard
+    Popup {
+        id:                 startupPopup
+        anchors.centerIn:   parent
+        width:              Math.min(startupWizard.implicitWidth, mainWindow.width - 2 * startupPopup._horizontalSpacing)
+        height:             Math.min(startupWizard.implicitHeight, mainWindow.availableHeight - 2 * startupPopup._verticalSpacing)
+        modal:              true
+        focus:              true
+        closePolicy:        (startupWizard && startupWizard.forceKeepingOpen !== undefined && startupWizard.forceKeepingOpen) ? Popup.NoAutoClose : Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        onClosed: mainWindow.showPreFlightChecklistIfNeeded()
+
+        property real _horizontalSpacing: ScreenTools.defaultFontPixelWidth * 5
+        property real _verticalSpacing: ScreenTools.defaultFontPixelHeight * 2
+
+        Connections {
+            target:         startupWizard
+            onCloseView:    startupPopup.close()
+        }
+
+        background: Rectangle {
+            radius: ScreenTools.defaultFontPixelHeight * 0.5
+            color:  qgcPal.window
+        }
+
+        StartupWizard {
+            id:             startupWizard
+            anchors.fill:   parent
+        }
+    }
 }

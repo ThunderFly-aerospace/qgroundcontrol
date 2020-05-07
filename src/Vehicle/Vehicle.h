@@ -781,6 +781,13 @@ public:
     Q_INVOKABLE void gimbalYawStep      (int direction);
     Q_INVOKABLE void centerGimbal       ();
 
+    /// Sends PARAM_MAP_RC message to vehicle
+    Q_INVOKABLE void sendParamMapRC(const QString& paramName, double scale, double centerValue, int tuningID, double minValue, double maxValue);
+
+    /// Clears all PARAM_MAP_RC settings from vehicle
+    Q_INVOKABLE void clearAllParamMapRC(void);
+
+
 #if !defined(NO_ARDUPILOT_DIALECT)
     Q_INVOKABLE void flashBootloader();
 #endif
@@ -1434,7 +1441,7 @@ private:
     QTimer                          _mavCommandAckTimer;
     int                             _mavCommandRetryCount;
     int                             _capabilitiesRetryCount =               0;
-    QTime                           _capabilitiesRetryElapsed;
+    QElapsedTimer                   _capabilitiesRetryElapsed;
     static const int                _mavCommandMaxRetryCount =              3;
     static const int                _mavCommandAckTimeoutMSecs =            3000;
     static const int                _mavCommandAckTimeoutMSecsHighLatency = 120000;
@@ -1483,7 +1490,7 @@ private:
     QTimer  _sendMultipleTimer;
     int     _nextSendMessageMultipleIndex;
 
-    QTime                           _flightTimer;
+    QElapsedTimer                   _flightTimer;
     QTimer                          _flightTimeUpdater;
     TrajectoryPoints*               _trajectoryPoints;
     QmlObjectListModel              _cameraTriggerPoints;

@@ -118,7 +118,7 @@ Item {
     // Note: The '_missionItemCount - 2' is a hack to not trigger resume mission when a mission ends with an RTL item
     property bool showResumeMission:    activeVehicle && !_vehicleArmed && _vehicleWasFlying && _missionAvailable && _resumeMissionIndex > 0 && (_resumeMissionIndex < _missionItemCount - 2)
 
-    property bool guidedUIVisible:      guidedActionConfirm.visible || guidedActionList.visible
+    property bool guidedUIVisible:      confirmDialog.visible || actionList.visible
 
     property var    _corePlugin:            QGroundControl.corePlugin
     property bool   _guidedActionsEnabled:  (!ScreenTools.isDebug && QGroundControl.corePlugin.options.guidedActionsRequireRCRSSI && activeVehicle) ? _rcRSSIAvailable : activeVehicle
@@ -190,12 +190,18 @@ Item {
             console.log("showStartMission", showStartMission)
         }
         _outputState()
+        if (showStartMission) {
+            confirmAction(actionStartMission)
+        }
     }
     onShowContinueMissionChanged: {
         if (_corePlugin.guidedActionsControllerLogging()) {
             console.log("showContinueMission", showContinueMission)
         }
         _outputState()
+        if (showContinueMission) {
+            confirmAction(actionContinueMission)
+        }
     }
     onShowRTLChanged: {
         if (_corePlugin.guidedActionsControllerLogging()) {
@@ -203,7 +209,17 @@ Item {
         }
         _outputState()
     }
-    // End of hack
+    onShowChangeAltChanged: {
+        if (_corePlugin.guidedActionsControllerLogging()) {
+            console.log("showChangeAlt", showChangeAlt)
+        }
+        _outputState()
+    }
+    onShowLandAbortChanged: {
+        if (showLandAbort) {
+            confirmAction(actionLandAbort)
+        }
+    }
 
     on_VehicleFlyingChanged: {
         _outputState()
@@ -221,6 +237,46 @@ Item {
         _vehicleInRTLMode =     activeVehicle ? _flightMode === activeVehicle.rtlFlightMode || _flightMode === activeVehicle.smartRTLFlightMode : false
         _vehicleInLandMode =    activeVehicle ? _flightMode === activeVehicle.landFlightMode : false
         _vehicleInMissionMode = activeVehicle ? _flightMode === activeVehicle.missionFlightMode : false // Must be last to get correct signalling for showStartMission popups
+    }
+
+    Connections {
+        target:                     missionController
+        onResumeMissionUploadFail:  confirmAction(actionResumeMissionUploadFail)
+    }
+
+    Connections {
+        target:                             mainWindow
+        onArmVehicleRequest:                armVehicleRequest()
+        onDisarmVehicleRequest:             disarmVehicleRequest()
+        onVtolTransitionToFwdFlightRequest: vtolTransitionToFwdFlightRequest()
+        onVtolTransitionToMRFlightRequest:  vtolTransitionToMRFlightRequest()
+    }
+
+    function armVehicleRequest() {
+        confirmAction(actionArm)
+    }
+
+    function disarmVehicleRequest() {
+        if (showEmergenyStop) {
+            confirmAction(actionEmergencyStop)
+        } else {
+            confirmAction(actionDisarm)
+        }
+
+    }
+
+    function vtolTransitionToFwdFlightRequest() {
+        confirmAction(actionVtolTransitionToFwdFlight)
+    }
+
+    function vtolTransitionToMRFlightRequest() {
+        confirmAction(actionVtolTransitionToMRFlight)
+    }
+
+    function closeAll() {
+        confirmDialog.visible =     false
+        actionList.visible =        false
+        altitudeSlider.visible =    false
     }
 
     // Called when an action is about to be executed in order to confirm

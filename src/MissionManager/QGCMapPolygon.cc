@@ -281,6 +281,15 @@ void QGCMapPolygon::appendVertices(const QList<QGeoCoordinate>& coordinates)
     emit pathChanged();
 }
 
+void QGCMapPolygon::appendVertices(const QVariantList& varCoords)
+{
+    QList<QGeoCoordinate> rgCoords;
+    for (const QVariant& varCoord: varCoords) {
+        rgCoords.append(varCoord.value<QGeoCoordinate>());
+    }
+    appendVertices(rgCoords);
+}
+
 void QGCMapPolygon::_polygonModelDirtyChanged(bool dirty)
 {
     if (dirty) {
@@ -467,7 +476,7 @@ bool QGCMapPolygon::loadKMLOrSHPFile(const QString& file)
     QString errorString;
     QList<QGeoCoordinate> rgCoords;
     if (!ShapeFileHelper::loadPolygonFromFile(file, rgCoords, errorString)) {
-        qgcApp()->showMessage(errorString);
+        qgcApp()->showAppMessage(errorString);
         return false;
     }
 
@@ -604,5 +613,12 @@ void QGCMapPolygon::setTraceMode(bool traceMode)
     if (traceMode != _traceMode) {
         _traceMode = traceMode;
         emit traceModeChanged(traceMode);
+    }
+}
+
+void QGCMapPolygon::setShowAltColor(bool showAltColor){
+    if (showAltColor != _showAltColor) {
+        _showAltColor = showAltColor;
+        emit showAltColorChanged(showAltColor);
     }
 }

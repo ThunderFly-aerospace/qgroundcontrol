@@ -22,6 +22,8 @@
 #endif
 #include "QGCLoggingCategory.h"
 #include "QGCCameraManager.h"
+#include "InstrumentValueArea.h"
+#include "InstrumentValueData.h"
 
 #include <QtQml>
 #include <QQmlEngine>
@@ -120,15 +122,18 @@ QGCCorePlugin::QGCCorePlugin(QGCApplication *app, QGCToolbox* toolbox)
     , _showTouchAreas(false)
     , _showAdvancedUI(true)
 {
+    QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership);
     _p = new QGCCorePlugin_p;
 }
 
 void QGCCorePlugin::setToolbox(QGCToolbox *toolbox)
 {
     QGCTool::setToolbox(toolbox);
-    QQmlEngine::setObjectOwnership(this, QQmlEngine::CppOwnership);
-    qmlRegisterUncreatableType<QGCCorePlugin>("QGroundControl.QGCCorePlugin", 1, 0, "QGCCorePlugin", "Reference only");
-    qmlRegisterUncreatableType<QGCOptions>("QGroundControl.QGCOptions",       1, 0, "QGCOptions",    "Reference only");
+
+    qmlRegisterUncreatableType<QGCCorePlugin>       ("QGroundControl", 1, 0, "QGCCorePlugin",       "Reference only");
+    qmlRegisterUncreatableType<QGCOptions>          ("QGroundControl", 1, 0, "QGCOptions",          "Reference only");
+    qmlRegisterUncreatableType<QGCFlyViewOptions>   ("QGroundControl", 1, 0, "QGCFlyViewOptions",   "Reference only");
+
     //-- Handle Camera and Video Changes
     connect(toolbox->multiVehicleManager(), &MultiVehicleManager::activeVehicleChanged, this, &QGCCorePlugin::_activeVehicleChanged);
 }
@@ -317,8 +322,8 @@ int QGCCorePlugin::defaultSettings()
 
 QGCOptions* QGCCorePlugin::options()
 {
-    if(!_p->defaultOptions) {
-        _p->defaultOptions = new QGCOptions();
+    if (!_p->defaultOptions) {
+        _p->defaultOptions = new QGCOptions(this);
     }
     return _p->defaultOptions;
 }
@@ -406,20 +411,45 @@ QString QGCCorePlugin::showAdvancedUIMessage() const
               "Are you sure you want to enable Advanced Mode?");
 }
 
-void QGCCorePlugin::valuesWidgetDefaultSettings(QStringList& largeValues, QStringList& smallValues)
+void QGCCorePlugin::instrumentValueAreaCreateDefaultSettings(const QString& defaultSettingsGroup)
 {
-    Q_UNUSED(smallValues);
-    largeValues << "Vehicle.altitudeRelative" << "Vehicle.groundSpeed" << "Vehicle.flightTime";
+    if (defaultSettingsGroup == InstrumentValueArea::valuePageDefaultSettingsGroup) {
+        InstrumentValueArea instrumentValueArea(defaultSettingsGroup);
+
+        instrumentValueArea.setFontSize(InstrumentValueArea::LargeFontSize);
+
+        QmlObjectListModel* columnModel = instrumentValueArea.appendRow();
+        InstrumentValueData* colValue = columnModel->value<InstrumentValueData*>(0);
+        colValue->setFact("Vehicle", "AltitudeRelative");
+        colValue->setText(colValue->fact()->shortDescription());
+        colValue->setShowUnits(true);
+
+        columnModel = instrumentValueArea.appendRow();
+        colValue = columnModel->value<InstrumentValueData*>(0);
+        colValue->setFact("Vehicle", "GroundSpeed");
+        colValue->setText(colValue->fact()->shortDescription());
+        colValue->setShowUnits(true);
+
+        columnModel = instrumentValueArea.appendRow();
+        colValue = columnModel->value<InstrumentValueData*>(0);
+        colValue->setFact("Vehicle", "FlightTime");
+        colValue->setText(colValue->fact()->shortDescription());
+        colValue->setShowUnits(false);
+    }
 }
 
-QQmlApplicationEngine* QGCCorePlugin::createRootWindow(QObject *parent)
+QQmlApplicationEngine* QGCCorePlugin::createQmlApplicationEngine(QObject* parent)
 {
-    QQmlApplicationEngine* pEngine = new QQmlApplicationEngine(parent);
-    pEngine->addImportPath("qrc:/qml");
-    pEngine->rootContext()->setContextProperty("joystickManager", qgcApp()->toolbox()->joystickManager());
-    pEngine->rootContext()->setContextProperty("debugMessageModel", AppMessages::getModel());
-    pEngine->load(QUrl(QStringLiteral("qrc:/qml/MainRootWindow.qml")));
-    return pEngine;
+    QQmlApplicationEngine* qmlEngine = new QQmlApplicationEngine(parent);
+    qmlEngine->addImportPath("qrc:/qml");
+    qmlEngine->rootContext()->setContextProperty("joystickManager", qgcApp()->toolbox()->joystickManager());
+    qmlEngine->rootContext()->setContextProperty("debugMessageModel", AppMessages::getModel());
+    return qmlEngine;
+}
+
+void QGCCorePlugin::createRootWindow(QQmlApplicationEngine* qmlEngine)
+{
+    qmlEngine->load(QUrl(QStringLiteral("qrc:/qml/MainRootWindow.qml")));
 }
 
 bool QGCCorePlugin::mavlinkMessage(Vehicle* vehicle, LinkInterface* link, mavlink_message_t message)
@@ -462,6 +492,15 @@ void* QGCCorePlugin::createVideoSink(QObject* parent, QQuickItem* widget)
 #endif
 }
 
+void QGCCorePlugin::releaseVideoSink(void* sink)
+{
+#if defined(QGC_GST_STREAMING)
+    GStreamer::releaseVideoSink(sink);
+#else
+    Q_UNUSED(sink)
+#endif
+}
+
 bool QGCCorePlugin::guidedActionsControllerLogging() const
 {
     return GuidedActionsControllerLog().isDebugEnabled();
@@ -475,4 +514,10 @@ QString QGCCorePlugin::stableVersionCheckFileUrl() const
 #else
     return QString("https://s3-us-west-2.amazonaws.com/qgroundcontrol/latest/QGC.version.txt");
 #endif
+}
+
+QStringList
+QGCCorePlugin::startupPages()
+{
+    return { "/qml/QGroundControl/Specific/UnitsWizardPage.qml" };
 }

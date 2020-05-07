@@ -28,7 +28,7 @@ class AssignedButtonAction : public QObject {
 public:
     AssignedButtonAction(QObject* parent, const QString name);
     QString action;
-    QTime   buttonTime;
+    QElapsedTimer buttonTime;
     bool    repeat = false;
 };
 
@@ -225,6 +225,7 @@ signals:
     void setArmed                   (bool arm);
     void setVtolInFwdFlight         (bool set);
     void setFlightMode              (const QString& flightMode);
+    void emergencyStop              ();
 
 protected:
     void    _setDefaultCalibration  ();
@@ -298,7 +299,7 @@ protected:
 
     static int          _transmitterMode;
     int                 _rgFunctionAxis[maxFunction] = {};
-    QTime               _axisTime;
+    QElapsedTimer       _axisTime;
 
     QmlObjectListModel              _assignableButtonActions;
     QList<AssignedButtonAction*>    _buttonActionArray;
@@ -351,6 +352,7 @@ private:
     static const char* _buttonActionGimbalLeft;
     static const char* _buttonActionGimbalRight;
     static const char* _buttonActionGimbalCenter;
+    static const char* _buttonActionEmergencyStop;
 
 private slots:
     void _activeVehicleChanged(Vehicle* activeVehicle);

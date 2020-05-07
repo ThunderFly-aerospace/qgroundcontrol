@@ -27,6 +27,8 @@
 #include <QRegularExpression>
 #include <QFontDatabase>
 #include <QQuickWindow>
+#include <QQuickImageProvider>
+#include <QQuickStyle>
 
 #ifdef QGC_ENABLE_BLUETOOTH
 #include <QBluetoothLocalDevice>
@@ -68,7 +70,7 @@
 #include "MissionManager.h"
 #include "QGroundControlQmlGlobal.h"
 #include "FlightMapSettings.h"
-#include "CoordinateVector.h"
+#include "FlightPathSegment.h"
 #include "PlanMasterController.h"
 #include "VideoManager.h"
 #include "VideoReceiver.h"
@@ -76,7 +78,8 @@
 #if defined(QGC_ENABLE_MAVLINK_INSPECTOR)
 #include "MAVLinkInspectorController.h"
 #endif
-#include "ValuesWidgetController.h"
+#include "InstrumentValueArea.h"
+#include "InstrumentValueData.h"
 #include "AppMessages.h"
 #include "SimulatedPosition.h"
 #include "PositionManager.h"
@@ -100,6 +103,9 @@
 #include "LogReplayLink.h"
 #include "VehicleObjectAvoidance.h"
 #include "TrajectoryPoints.h"
+#include "RCToParamDialogController.h"
+#include "QGCImageProvider.h"
+#include "TerrainProfile.h"
 
 #if defined(QGC_ENABLE_PAIRING)
 #include "PairingManager.h"
@@ -214,6 +220,11 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
             }
             permFile.close();
         }
+
+        // Set default QtQuick style if not configured
+        if (QString(getenv("QT_QUICK_CONTROLS_STYLE")).isEmpty()) {
+            QQuickStyle::setStyle("Universal");
+        }
     }
 #endif
 #endif
@@ -245,13 +256,21 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
     connect(&_missingParamsDelayedDisplayTimer, &QTimer::timeout, this, &QGCApplication::_missingParamsDisplay);
 
     // Set application information
+    QString applicationName;
     if (_runningUnitTests) {
         // We don't want unit tests to use the same QSettings space as the normal app. So we tweak the app
         // name. Also we want to run unit tests with clean settings every time.
-        setApplicationName(QString("%1_unittest").arg(QGC_APPLICATION_NAME));
+        applicationName = QStringLiteral("%1_unittest").arg(QGC_APPLICATION_NAME);
     } else {
-        setApplicationName(QGC_APPLICATION_NAME);
+#ifdef DAILY_BUILD
+        // This gives daily builds their own separate settings space. Allowing you to use daily and stable builds
+        // side by side without daily screwing up your stable settings.
+        applicationName = QStringLiteral("%1 Daily").arg(QGC_APPLICATION_NAME);
+#else
+        applicationName = QGC_APPLICATION_NAME;
+#endif
     }
+    setApplicationName(applicationName);
     setOrganizationName(QGC_ORG_NAME);
     setOrganizationDomain(QGC_ORG_DOMAIN);
 
@@ -291,10 +310,6 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
                 settings.clear();
                 _settingsUpgraded = true;
             }
-        } else if (settings.allKeys().count()) {
-            // Settings version key is missing and there are settings. This is an upgrade scenario.
-            settings.clear();
-            _settingsUpgraded = true;
         }
     }
     settings.setValue(_settingsVersionKey, QGC_SETTINGS_VERSION);
@@ -347,7 +362,6 @@ QGCApplication::QGCApplication(int &argc, char* argv[], bool unitTesting)
    }
 #endif /* __mobile__ */
 
-   setLanguage();
     _checkForNewVersion();
 }
 
@@ -365,7 +379,8 @@ void QGCApplication::_exitWithError(QString errorMessage)
 void QGCApplication::setLanguage()
 {
     _locale = QLocale::system();
-    qDebug() << "System reported locale:" << _locale << _locale.name();
+    qDebug() << "System reported locale:" << _locale << "; Name" << _locale.name() << "; Preffered (used in maps): " << (QLocale::system().uiLanguages().length() > 0 ? QLocale::system().uiLanguages()[0] : "None");
+
     int langID = toolbox()->settingsManager()->appSettings()->language()->rawValue().toInt();
     //-- See App.SettinsGroup.json for index
     if(langID) {
@@ -478,6 +493,7 @@ void QGCApplication::_initCommon()
     static const char* kQGroundControl  = "QGroundControl";
     static const char* kQGCControllers  = "QGroundControl.Controllers";
     static const char* kQGCVehicle      = "QGroundControl.Vehicle";
+    static const char* kQGCTemplates    = "QGroundControl.Templates";
 
     QSettings settings;
 
@@ -500,11 +516,12 @@ void QGCApplication::_initCommon()
 
     qmlRegisterUncreatableType<MissionItem>         (kQGroundControl,                       1, 0, "MissionItem",                kRefOnly);
     qmlRegisterUncreatableType<VisualMissionItem>   (kQGroundControl,                       1, 0, "VisualMissionItem",          kRefOnly);
-    qmlRegisterUncreatableType<CoordinateVector>    (kQGroundControl,                       1, 0, "CoordinateVector",           kRefOnly);
+    qmlRegisterUncreatableType<FlightPathSegment>    (kQGroundControl,                       1, 0, "FlightPathSegment",           kRefOnly);
     qmlRegisterUncreatableType<QmlObjectListModel>  (kQGroundControl,                       1, 0, "QmlObjectListModel",         kRefOnly);
     qmlRegisterUncreatableType<MissionCommandTree>  (kQGroundControl,                       1, 0, "MissionCommandTree",         kRefOnly);
     qmlRegisterUncreatableType<CameraCalc>          (kQGroundControl,                       1, 0, "CameraCalc",                 kRefOnly);
     qmlRegisterUncreatableType<LogReplayLink>       (kQGroundControl,                       1, 0, "LogReplayLink",              kRefOnly);
+    qmlRegisterUncreatableType<InstrumentValueData> (kQGroundControl,                       1, 0, "InstrumentValueData",        kRefOnly);
     qmlRegisterType<LogReplayLinkController>        (kQGroundControl,                       1, 0, "LogReplayLinkController");
 #if defined(QGC_ENABLE_MAVLINK_INSPECTOR)
     qmlRegisterUncreatableType<MAVLinkChartController> (kQGroundControl,                    1, 0, "MAVLinkChart",               kRefOnly);
@@ -524,19 +541,24 @@ void QGCApplication::_initCommon()
     qmlRegisterUncreatableType<QGCGeoBoundingCube>  ("QGroundControl.FlightMap",            1, 0, "QGCGeoBoundingCube",         kRefOnly);
     qmlRegisterUncreatableType<TrajectoryPoints>    ("QGroundControl.FlightMap",            1, 0, "TrajectoryPoints",           kRefOnly);
 
+    qmlRegisterType<InstrumentValueArea>            (kQGCTemplates,                         1, 0, "InstrumentValueArea");
+
     qmlRegisterType<QGCMapCircle>                   ("QGroundControl.FlightMap",            1, 0, "QGCMapCircle");
 
     qmlRegisterType<ParameterEditorController>      (kQGCControllers,                       1, 0, "ParameterEditorController");
     qmlRegisterType<ESP8266ComponentController>     (kQGCControllers,                       1, 0, "ESP8266ComponentController");
     qmlRegisterType<ScreenToolsController>          (kQGCControllers,                       1, 0, "ScreenToolsController");
     qmlRegisterType<PlanMasterController>           (kQGCControllers,                       1, 0, "PlanMasterController");
-    qmlRegisterType<ValuesWidgetController>         (kQGCControllers,                       1, 0, "ValuesWidgetController");
+    qmlRegisterType<InstrumentValueArea>            (kQGCTemplates,                         1, 0, "InstrumentValueArea");
     qmlRegisterType<QGCFileDialogController>        (kQGCControllers,                       1, 0, "QGCFileDialogController");
     qmlRegisterType<RCChannelMonitorController>     (kQGCControllers,                       1, 0, "RCChannelMonitorController");
     qmlRegisterType<JoystickConfigController>       (kQGCControllers,                       1, 0, "JoystickConfigController");
     qmlRegisterType<LogDownloadController>          (kQGCControllers,                       1, 0, "LogDownloadController");
     qmlRegisterType<SyslinkComponentController>     (kQGCControllers,                       1, 0, "SyslinkComponentController");
     qmlRegisterType<EditPositionDialogController>   (kQGCControllers,                       1, 0, "EditPositionDialogController");
+    qmlRegisterType<RCToParamDialogController>      (kQGCControllers,                       1, 0, "RCToParamDialogController");
+
+    qmlRegisterType<TerrainProfile>                 ("QGroundControl.Controls",             1, 0, "TerrainProfile");
 
 #ifndef __mobile__
 #ifndef NO_SERIAL_LINK
@@ -548,6 +570,7 @@ void QGCApplication::_initCommon()
 #if defined(QGC_ENABLE_MAVLINK_INSPECTOR)
     qmlRegisterType<MAVLinkInspectorController>     (kQGCControllers,                       1, 0, "MAVLinkInspectorController");
 #endif
+
     // Register Qml Singletons
     qmlRegisterSingletonType<QGroundControlQmlGlobal>   ("QGroundControl",                          1, 0, "QGroundControl",         qgroundcontrolQmlGlobalSingletonFactory);
     qmlRegisterSingletonType<ScreenToolsController>     ("QGroundControl.ScreenToolsController",    1, 0, "ScreenToolsController",  screenToolsControllerSingletonFactory);
@@ -566,7 +589,12 @@ bool QGCApplication::_initForNormalAppBoot()
 
     QSettings settings;
 
-    _qmlAppEngine = toolbox()->corePlugin()->createRootWindow(this);
+    _qmlAppEngine = toolbox()->corePlugin()->createQmlApplicationEngine(this);
+    toolbox()->corePlugin()->createRootWindow(_qmlAppEngine);
+
+    // Image provider for PX4 Flow
+    QQuickImageProvider* pImgProvider = dynamic_cast<QQuickImageProvider*>(qgcApp()->toolbox()->imageProvider());
+    _qmlAppEngine->addImageProvider(QStringLiteral("QGCImages"), pImgProvider);
 
     QQuickWindow* rootWindow = (QQuickWindow*)qgcApp()->mainRootWindow();
 
@@ -592,7 +620,7 @@ bool QGCApplication::_initForNormalAppBoot()
     toolbox()->joystickManager()->init();
 
     if (_settingsUpgraded) {
-        showMessage(QString(tr("The format for %1 saved settings has been modified. "
+        showAppMessage(QString(tr("The format for %1 saved settings has been modified. "
                     "Your saved settings have been reset to defaults.")).arg(applicationName()));
     }
 
@@ -600,7 +628,7 @@ bool QGCApplication::_initForNormalAppBoot()
     toolbox()->linkManager()->startAutoConnectedLinks();
 
     if (getQGCMapEngine()->wasCacheReset()) {
-        showMessage(tr("The Offline Map Cache database has been upgraded. "
+        showAppMessage(tr("The Offline Map Cache database has been upgraded. "
                     "Your old map cache sets have been reset."));
     }
 
@@ -633,17 +661,17 @@ QGCApplication* qgcApp(void)
 
 void QGCApplication::informationMessageBoxOnMainThread(const QString& /*title*/, const QString& msg)
 {
-    showMessage(msg);
+    showAppMessage(msg);
 }
 
 void QGCApplication::warningMessageBoxOnMainThread(const QString& /*title*/, const QString& msg)
 {
-    showMessage(msg);
+    showAppMessage(msg);
 }
 
 void QGCApplication::criticalMessageBoxOnMainThread(const QString& /*title*/, const QString& msg)
 {
-    showMessage(msg);
+    showAppMessage(msg);
 }
 
 void QGCApplication::saveTelemetryLogOnMainThread(QString tempLogfile)
@@ -669,7 +697,7 @@ void QGCApplication::saveTelemetryLogOnMainThread(QString tempLogfile)
         QFile tempFile(tempLogfile);
         if (!tempFile.copy(saveFilePath)) {
             QString error = tr("Unable to save telemetry log. Error copying telemetry to '%1': '%2'.").arg(saveFilePath).arg(tempFile.errorString());
-            showMessage(error);
+            showAppMessage(error);
         }
     }
     QFile::remove(tempLogfile);
@@ -686,14 +714,14 @@ bool QGCApplication::_checkTelemetrySavePath(bool /*useMessageBox*/)
     QString saveDirPath = _toolbox->settingsManager()->appSettings()->telemetrySavePath();
     if (saveDirPath.isEmpty()) {
         QString error = tr("Unable to save telemetry log. Application save directory is not set.");
-        showMessage(error);
+        showAppMessage(error);
         return false;
     }
 
     QDir saveDir(saveDirPath);
     if (!saveDir.exists()) {
         QString error = tr("Unable to save telemetry log. Telemetry save directory \"%1\" does not exist.").arg(saveDirPath);
-        showMessage(error);
+        showAppMessage(error);
         return false;
     }
 
@@ -726,19 +754,18 @@ void QGCApplication::_missingParamsDisplay(void)
         }
         _missingParams.clear();
 
-        showMessage(tr("Parameters are missing from firmware. You may be running a version of firmware QGC does not work correctly with or your firmware has a bug in it. Missing params: %1").arg(params));
+        showAppMessage(tr("Parameters are missing from firmware. You may be running a version of firmware which is not fully supported or your firmware has a bug in it. Missing params: %1").arg(params));
     }
 }
 
 QObject* QGCApplication::_rootQmlObject()
 {
-    if(_qmlAppEngine && _qmlAppEngine->rootObjects().size())
+    if (_qmlAppEngine && _qmlAppEngine->rootObjects().size())
         return _qmlAppEngine->rootObjects()[0];
     return nullptr;
 }
 
-
-void QGCApplication::showMessage(const QString& message)
+void QGCApplication::showVehicleMessage(const QString& message)
 {
     // PreArm messages are handled by Vehicle and shown in Map
     if (message.startsWith(QStringLiteral("PreArm")) || message.startsWith(QStringLiteral("preflight"), Qt::CaseInsensitive)) {
@@ -748,12 +775,43 @@ void QGCApplication::showMessage(const QString& message)
     if (rootQmlObject) {
         QVariant varReturn;
         QVariant varMessage = QVariant::fromValue(message);
-        QMetaObject::invokeMethod(_rootQmlObject(), "showMessage", Q_RETURN_ARG(QVariant, varReturn), Q_ARG(QVariant, varMessage));
+        QMetaObject::invokeMethod(_rootQmlObject(), "showVehicleMessage", Q_RETURN_ARG(QVariant, varReturn), Q_ARG(QVariant, varMessage));
     } else if (runningUnitTests()) {
         // Unit tests can run without UI
-        qDebug() << "QGCApplication::showMessage unittest" << message;
+        qDebug() << "QGCApplication::showVehicleMessage unittest" << message;
     } else {
         qWarning() << "Internal error";
+    }
+}
+
+void QGCApplication::showAppMessage(const QString& message, const QString& title)
+{
+    QString dialogTitle = title.isEmpty() ? applicationName() : title;
+
+    QObject* rootQmlObject = _rootQmlObject();
+    if (rootQmlObject) {
+        QVariant varReturn;
+        QVariant varMessage = QVariant::fromValue(message);
+        QMetaObject::invokeMethod(_rootQmlObject(), "showMessageDialog", Q_RETURN_ARG(QVariant, varReturn), Q_ARG(QVariant, dialogTitle), Q_ARG(QVariant, varMessage));
+    } else if (runningUnitTests()) {
+        // Unit tests can run without UI
+        qDebug() << "QGCApplication::showAppMessage unittest" << message << dialogTitle;
+    } else {
+        // UI isn't ready yet
+        _delayedAppMessages.append(QPair<QString, QString>(dialogTitle, message));
+        QTimer::singleShot(200, this, &QGCApplication::_showDelayedAppMessages);
+    }
+}
+
+void QGCApplication::_showDelayedAppMessages(void)
+{
+    if (_rootQmlObject()) {
+        for (const QPair<QString, QString>& appMsg: _delayedAppMessages) {
+            showAppMessage(appMsg.second, appMsg.first);
+        }
+        _delayedAppMessages.clear();
+    } else {
+        QTimer::singleShot(200, this, &QGCApplication::_showDelayedAppMessages);
     }
 }
 

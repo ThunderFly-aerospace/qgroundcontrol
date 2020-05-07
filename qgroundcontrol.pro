@@ -250,12 +250,14 @@ QT += \
     positioning \
     qml \
     quick \
+    quickcontrols2 \
     quickwidgets \
     sql \
     svg \
     widgets \
     xml \
-    texttospeech
+    texttospeech \
+    core-private
 
 # Multimedia only used if QVC is enabled
 !contains (DEFINES, QGC_DISABLE_UVC) {
@@ -356,7 +358,8 @@ CustomBuild {
     RESOURCES += \
         $$PWD/qgroundcontrol.qrc \
         $$PWD/qgcresources.qrc \
-        $$PWD/qgcimages.qrc
+        $$PWD/qgcimages.qrc \
+        $$PWD/InstrumentValueIcons.qrc \
 }
 
 # On Qt 5.9 android versions there is the following bug: https://bugreports.qt.io/browse/QTBUG-61424
@@ -432,6 +435,7 @@ contains (DEFINES, QGC_ENABLE_PAIRING) {
 #
 
 HEADERS += \
+    src/QmlControls/QmlUnitsConversion.h \
     src/api/QGCCorePlugin.h \
     src/api/QGCOptions.h \
     src/api/QGCSettings.h \
@@ -570,7 +574,6 @@ HEADERS += \
     src/Camera/QGCCameraManager.h \
     src/CmdLineOptParser.h \
     src/FirmwarePlugin/PX4/px4_custom_mode.h \
-    src/FlightMap/Widgets/ValuesWidgetController.h \
     src/FollowMe/FollowMe.h \
     src/Joystick/Joystick.h \
     src/Joystick/JoystickManager.h \
@@ -589,6 +592,7 @@ HEADERS += \
     src/MissionManager/GeoFenceController.h \
     src/MissionManager/GeoFenceManager.h \
     src/MissionManager/KMLPlanDomDocument.h \
+    src/MissionManager/LandingComplexItem.h \
     src/MissionManager/MissionCommandList.h \
     src/MissionManager/MissionCommandTree.h \
     src/MissionManager/MissionCommandUIInfo.h \
@@ -618,6 +622,7 @@ HEADERS += \
     src/MissionManager/TakeoffMissionItem.h \
     src/MissionManager/TransectStyleComplexItem.h \
     src/MissionManager/VisualMissionItem.h \
+    src/MissionManager/VTOLLandingComplexItem.h \
     src/PositionManager/PositionManager.h \
     src/PositionManager/SimulatedPosition.h \
     src/Geo/QGCGeo.h \
@@ -640,8 +645,10 @@ HEADERS += \
     src/QGCTemporaryFile.h \
     src/QGCToolbox.h \
     src/QmlControls/AppMessages.h \
-    src/QmlControls/CoordinateVector.h \
     src/QmlControls/EditPositionDialogController.h \
+    src/QmlControls/FlightPathSegment.h \
+    src/QmlControls/InstrumentValueData.h \
+    src/QmlControls/InstrumentValueArea.h \
     src/QmlControls/ParameterEditorController.h \
     src/QmlControls/QGCFileDialogController.h \
     src/QmlControls/QGCImageProvider.h \
@@ -649,7 +656,9 @@ HEADERS += \
     src/QmlControls/QmlObjectListModel.h \
     src/QmlControls/QGCGeoBoundingCube.h \
     src/QmlControls/RCChannelMonitorController.h \
+    src/QmlControls/RCToParamDialogController.h \
     src/QmlControls/ScreenToolsController.h \
+    src/QmlControls/TerrainProfile.h \
     src/QtLocationPlugin/QMLControl/QGCMapEngineManager.h \
     src/Settings/ADSBVehicleManagerSettings.h \
     src/Settings/AppSettings.h \
@@ -776,7 +785,6 @@ SOURCES += \
     src/Camera/QGCCameraIO.cc \
     src/Camera/QGCCameraManager.cc \
     src/CmdLineOptParser.cc \
-    src/FlightMap/Widgets/ValuesWidgetController.cc \
     src/FollowMe/FollowMe.cc \
     src/Joystick/Joystick.cc \
     src/Joystick/JoystickManager.cc \
@@ -795,6 +803,7 @@ SOURCES += \
     src/MissionManager/GeoFenceController.cc \
     src/MissionManager/GeoFenceManager.cc \
     src/MissionManager/KMLPlanDomDocument.cc \
+    src/MissionManager/LandingComplexItem.cc \
     src/MissionManager/MissionCommandList.cc \
     src/MissionManager/MissionCommandTree.cc \
     src/MissionManager/MissionCommandUIInfo.cc \
@@ -823,6 +832,7 @@ SOURCES += \
     src/MissionManager/TakeoffMissionItem.cc \
     src/MissionManager/TransectStyleComplexItem.cc \
     src/MissionManager/VisualMissionItem.cc \
+    src/MissionManager/VTOLLandingComplexItem.cc \
     src/PositionManager/PositionManager.cpp \
     src/PositionManager/SimulatedPosition.cc \
     src/Geo/QGCGeo.cc \
@@ -843,8 +853,10 @@ SOURCES += \
     src/QGCTemporaryFile.cc \
     src/QGCToolbox.cc \
     src/QmlControls/AppMessages.cc \
-    src/QmlControls/CoordinateVector.cc \
     src/QmlControls/EditPositionDialogController.cc \
+    src/QmlControls/FlightPathSegment.cc \
+    src/QmlControls/InstrumentValueData.cc \
+    src/QmlControls/InstrumentValueArea.cc \
     src/QmlControls/ParameterEditorController.cc \
     src/QmlControls/QGCFileDialogController.cc \
     src/QmlControls/QGCImageProvider.cc \
@@ -852,7 +864,9 @@ SOURCES += \
     src/QmlControls/QmlObjectListModel.cc \
     src/QmlControls/QGCGeoBoundingCube.cc \
     src/QmlControls/RCChannelMonitorController.cc \
+    src/QmlControls/RCToParamDialogController.cc \
     src/QmlControls/ScreenToolsController.cc \
+    src/QmlControls/TerrainProfile.cc \
     src/QtLocationPlugin/QMLControl/QGCMapEngineManager.cc \
     src/Settings/ADSBVehicleManagerSettings.cc \
     src/Settings/AppSettings.cc \
@@ -1382,3 +1396,6 @@ contains (CONFIG, QGC_DISABLE_INSTALLER_SETUP) {
 } else {
     include(QGCInstaller.pri)
 }
+
+DISTFILES += \
+    src/QmlControls/QGroundControl/Specific/qmldir

@@ -397,7 +397,7 @@ bool APMFirmwarePlugin::_handleIncomingStatusText(Vehicle* vehicle, mavlink_mess
                 if (supportedMajorNumber != -1) {
                     if (firmwareVersion.majorNumber() < supportedMajorNumber ||
                             (firmwareVersion.majorNumber() == supportedMajorNumber && firmwareVersion.minorNumber() < supportedMinorNumber)) {
-                        qgcApp()->showMessage(tr("QGroundControl fully supports Version %1.%2 and above. You are using a version prior to that. This combination is untested, you may run into unpredictable results.").arg(supportedMajorNumber).arg(supportedMinorNumber));
+                        qgcApp()->showAppMessage(tr("QGroundControl fully supports Version %1.%2 and above. You are using a version prior to that. This combination is untested, you may run into unpredictable results.").arg(supportedMajorNumber).arg(supportedMinorNumber));
                     }
                 }
             }
@@ -753,17 +753,17 @@ QString APMFirmwarePlugin::missionCommandOverrides(MAV_TYPE vehicleType) const
 {
     switch (vehicleType) {
     case MAV_TYPE_GENERIC:
-        return QStringLiteral(":/json/APM/MavCmdInfoCommon.json");
+        return QStringLiteral(":/json/APM-MavCmdInfoCommon.json");
     case MAV_TYPE_FIXED_WING:
-        return QStringLiteral(":/json/APM/MavCmdInfoFixedWing.json");
+        return QStringLiteral(":/json/APM-MavCmdInfoFixedWing.json");
     case MAV_TYPE_QUADROTOR:
-        return QStringLiteral(":/json/APM/MavCmdInfoMultiRotor.json");
+        return QStringLiteral(":/json/APM-MavCmdInfoMultiRotor.json");
     case MAV_TYPE_VTOL_QUADROTOR:
-        return QStringLiteral(":/json/APM/MavCmdInfoVTOL.json");
+        return QStringLiteral(":/json/APM-MavCmdInfoVTOL.json");
     case MAV_TYPE_SUBMARINE:
-        return QStringLiteral(":/json/APM/MavCmdInfoSub.json");
+        return QStringLiteral(":/json/APM-MavCmdInfoSub.json");
     case MAV_TYPE_GROUND_ROVER:
-        return QStringLiteral(":/json/APM/MavCmdInfoRover.json");
+        return QStringLiteral(":/json/APM-MavCmdInfoRover.json");
     default:
         qWarning() << "APMFirmwarePlugin::missionCommandOverrides called with bad MAV_TYPE:" << vehicleType;
         return QString();
@@ -798,7 +798,7 @@ void APMFirmwarePlugin::_soloVideoHandshake(Vehicle* vehicle, bool originalSoloF
 
 void APMFirmwarePlugin::_artooSocketError(QAbstractSocket::SocketError socketError)
 {
-    qgcApp()->showMessage(tr("Error during Solo video link setup: %1").arg(socketError));
+    qgcApp()->showAppMessage(tr("Error during Solo video link setup: %1").arg(socketError));
 }
 
 QString APMFirmwarePlugin::internalParameterMetaDataFile(Vehicle* vehicle)
@@ -888,7 +888,7 @@ void APMFirmwarePlugin::pauseVehicle(Vehicle* vehicle)
 void APMFirmwarePlugin::guidedModeGotoLocation(Vehicle* vehicle, const QGeoCoordinate& gotoCoord)
 {
     if (qIsNaN(vehicle->altitudeRelative()->rawValue().toDouble())) {
-        qgcApp()->showMessage(QStringLiteral("Unable to go to location, vehicle position not known."));
+        qgcApp()->showAppMessage(QStringLiteral("Unable to go to location, vehicle position not known."));
         return;
     }
 
@@ -908,7 +908,12 @@ void APMFirmwarePlugin::guidedModeRTL(Vehicle* vehicle, bool smartRTL)
 void APMFirmwarePlugin::guidedModeChangeAltitude(Vehicle* vehicle, double altitudeChange)
 {
     if (qIsNaN(vehicle->altitudeRelative()->rawValue().toDouble())) {
-        qgcApp()->showMessage(tr("Unable to change altitude, vehicle altitude not known."));
+        qgcApp()->showAppMessage(tr("Unable to change altitude, vehicle altitude not known."));
+        return;
+    }
+
+    if (abs(altitudeChange) < 0.01) {
+        // This prevents unecessary changes to Guided mode when the users selects pause and doesn't really touch the altitude slider
         return;
     }
 
@@ -963,13 +968,13 @@ double APMFirmwarePlugin::minimumTakeoffAltitude(Vehicle* vehicle)
 bool APMFirmwarePlugin::_guidedModeTakeoff(Vehicle* vehicle, double altitudeRel)
 {
     if (!vehicle->multiRotor() && !vehicle->vtol()) {
-        qgcApp()->showMessage(tr("Vehicle does not support guided takeoff"));
+        qgcApp()->showAppMessage(tr("Vehicle does not support guided takeoff"));
         return false;
     }
 
     double vehicleAltitudeAMSL = vehicle->altitudeAMSL()->rawValue().toDouble();
     if (qIsNaN(vehicleAltitudeAMSL)) {
-        qgcApp()->showMessage(tr("Unable to takeoff, vehicle position not known."));
+        qgcApp()->showAppMessage(tr("Unable to takeoff, vehicle position not known."));
         return false;
     }
 
@@ -979,12 +984,12 @@ bool APMFirmwarePlugin::_guidedModeTakeoff(Vehicle* vehicle, double altitudeRel)
     }
 
     if (!_setFlightModeAndValidate(vehicle, "Guided")) {
-        qgcApp()->showMessage(tr("Unable to takeoff: Vehicle failed to change to Guided mode."));
+        qgcApp()->showAppMessage(tr("Unable to takeoff: Vehicle failed to change to Guided mode."));
         return false;
     }
 
     if (!_armVehicleAndValidate(vehicle)) {
-        qgcApp()->showMessage(tr("Unable to takeoff: Vehicle failed to arm."));
+        qgcApp()->showAppMessage(tr("Unable to takeoff: Vehicle failed to arm."));
         return false;
     }
 
@@ -1002,7 +1007,7 @@ void APMFirmwarePlugin::startMission(Vehicle* vehicle)
     if (vehicle->flying()) {
         // Vehicle already in the air, we just need to switch to auto
         if (!_setFlightModeAndValidate(vehicle, "Auto")) {
-            qgcApp()->showMessage(tr("Unable to start mission: Vehicle failed to change to Auto mode."));
+            qgcApp()->showAppMessage(tr("Unable to start mission: Vehicle failed to change to Auto mode."));
         }
         return;
     }
@@ -1010,19 +1015,19 @@ void APMFirmwarePlugin::startMission(Vehicle* vehicle)
     if (!vehicle->armed()) {
         // First switch to flight mode we can arm from
         if (!_setFlightModeAndValidate(vehicle, "Guided")) {
-            qgcApp()->showMessage(tr("Unable to start mission: Vehicle failed to change to Guided mode."));
+            qgcApp()->showAppMessage(tr("Unable to start mission: Vehicle failed to change to Guided mode."));
             return;
         }
 
         if (!_armVehicleAndValidate(vehicle)) {
-            qgcApp()->showMessage(tr("Unable to start mission: Vehicle failed to arm."));
+            qgcApp()->showAppMessage(tr("Unable to start mission: Vehicle failed to arm."));
             return;
         }
     }
 
     if (vehicle->fixedWing()) {
         if (!_setFlightModeAndValidate(vehicle, "Auto")) {
-            qgcApp()->showMessage(tr("Unable to start mission: Vehicle failed to change to Auto mode."));
+            qgcApp()->showAppMessage(tr("Unable to start mission: Vehicle failed to change to Auto mode."));
             return;
         }
     } else {
@@ -1092,7 +1097,7 @@ void APMFirmwarePlugin::_sendGCSMotionReport(Vehicle* vehicle, FollowMe::GCSMoti
         static bool sentOnce = false;
         if (!sentOnce) {
             sentOnce = true;
-            qgcApp()->showMessage(tr("Follow failed: Home position not set."));
+            qgcApp()->showAppMessage(tr("Follow failed: Home position not set."));
         }
         return;
     }
@@ -1102,7 +1107,7 @@ void APMFirmwarePlugin::_sendGCSMotionReport(Vehicle* vehicle, FollowMe::GCSMoti
         if (!sentOnce) {
             sentOnce = true;
             qWarning() << "APMFirmwarePlugin::_sendGCSMotionReport estimateCapabilities" << estimationCapabilities;
-            qgcApp()->showMessage(tr("Follow failed: Ground station cannot provide required position information."));
+            qgcApp()->showAppMessage(tr("Follow failed: Ground station cannot provide required position information."));
         }
         return;
     }

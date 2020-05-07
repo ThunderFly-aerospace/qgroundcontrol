@@ -19,7 +19,7 @@ import QGroundControl.Vehicle       1.0
 
 Rectangle {
     width:      mainColumn.width  + ScreenTools.defaultFontPixelWidth * 3
-    height:     Math.min(availableHeight - (_verticalMargin * 2), mainColumn.height + ScreenTools.defaultFontPixelHeight)
+    height:     Math.min(mainWindow.availableHeight - (_verticalMargin * 2), mainColumn.height + ScreenTools.defaultFontPixelHeight)
     color:      qgcPal.windowShade
     radius:     3
 
@@ -31,6 +31,11 @@ Rectangle {
     }
 
     property bool allChecksPassed:  false
+    property var  vehicleCopy:       activeVehicle
+
+    onVehicleCopyChanged: {
+        checkListRepeater.model.reset()
+    }
 
     onAllChecksPassedChanged: {
         if (allChecksPassed) {
